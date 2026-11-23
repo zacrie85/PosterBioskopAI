@@ -14,9 +14,6 @@ on:
 permissions:
   contents: write
 
-env:
-  MODEL_BASE: https://huggingface.co/jdp8/sd-turbo-onnx/resolve/main
-
 jobs:
   build-exe:
     runs-on: windows-latest
@@ -74,18 +71,23 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pillow opencv-python-headless numpy regex onnxruntime
 
-      - name: Unduh model AI (SD-Turbo ONNX fp16, ~2,7 GB)
+      - name: Unduh model AI lewat kode aplikasi (8 file, ~2,5 GB)
+        timeout-minutes: 20
         run: |
-          mkdir -p models/sd-turbo-onnx/tokenizer models/sd-turbo-onnx/text_encoder models/sd-turbo-onnx/unet models/sd-turbo-onnx/vae_decoder models/sd-turbo-onnx/vae_encoder
-          B=$MODEL_BASE
-          curl -sL --fail -o models/sd-turbo-onnx/text_encoder/model.onnx $B/text_encoder/model.onnx &
-          curl -sL --fail -o models/sd-turbo-onnx/unet/model.onnx        $B/unet/model.onnx &
-          curl -sL --fail -o models/sd-turbo-onnx/vae_decoder/model.onnx $B/vae_decoder/model.onnx &
-          curl -sL --fail -o models/sd-turbo-onnx/vae_encoder/model.onnx $B/vae_encoder/model.onnx &
-          curl -sL --fail -o models/sd-turbo-onnx/tokenizer/vocab.json   $B/tokenizer/vocab.json &
-          curl -sL --fail -o models/sd-turbo-onnx/tokenizer/merges.txt   $B/tokenizer/merges.txt &
-          wait
-          du -sh models/sd-turbo-onnx
+          python - <<'PY'
+          import poster_ai
+
+          state = {"last": ""}
+          def prog(fase, got, total):
+              if fase != state["last"]:
+                  print("mengunduh:", fase)
+                  state["last"] = fase
+
+          ok = poster_ai.download_model(progress=prog)
+          siap, got, total, folder = poster_ai.model_status()
+          print("siap:", siap, "|", got, "/", total, "byte |", folder)
+          assert siap, "unduhan model tidak lengkap"
+          PY
 
       - name: Buat video uji sintetis
         run: |
@@ -109,6 +111,7 @@ jobs:
           PY
 
       - name: Jalankan pipeline AI (batch, rasio 9:16)
+        timeout-minutes: 25
         run: python batch_poster.py video_uji --out hasil_ai --rasio "9:16" --kualitas "Cepat (1 langkah)"
 
       - name: Simpan contoh poster AI sebagai artifact
@@ -123,20 +126,34 @@ jobs:
   build-model:
     runs-on: ubuntu-latest
     steps:
-      - name: Unduh model AI (~2,7 GB dari HuggingFace)
+      - name: Siapkan Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependensi minimal (untuk pengunduh model)
+        run: python -m pip install --quiet pillow numpy
+
+      - name: Unduh model AI lewat kode aplikasi (8 file, ~2,5 GB)
+        timeout-minutes: 20
         run: |
-          mkdir -p models/sd-turbo-onnx/tokenizer models/sd-turbo-onnx/text_encoder models/sd-turbo-onnx/unet models/sd-turbo-onnx/vae_decoder models/sd-turbo-onnx/vae_encoder
-          B=$MODEL_BASE
-          curl -sL --fail -o models/sd-turbo-onnx/text_encoder/model.onnx $B/text_encoder/model.onnx &
-          curl -sL --fail -o models/sd-turbo-onnx/unet/model.onnx        $B/unet/model.onnx &
-          curl -sL --fail -o models/sd-turbo-onnx/vae_decoder/model.onnx $B/vae_decoder/model.onnx &
-          curl -sL --fail -o models/sd-turbo-onnx/vae_encoder/model.onnx $B/vae_encoder/model.onnx &
-          curl -sL --fail -o models/sd-turbo-onnx/tokenizer/vocab.json   $B/tokenizer/vocab.json &
-          curl -sL --fail -o models/sd-turbo-onnx/tokenizer/merges.txt   $B/tokenizer/merges.txt &
-          wait
-          du -sh models/sd-turbo-onnx
+          python - <<'PY'
+          import poster_ai
+
+          state = {"last": ""}
+          def prog(fase, got, total):
+              if fase != state["last"]:
+                  print("mengunduh:", fase)
+                  state["last"] = fase
+
+          ok = poster_ai.download_model(progress=prog)
+          siap, got, total, folder = poster_ai.model_status()
+          print("siap:", siap, "|", got, "/", total, "byte |", folder)
+          assert siap, "unduhan model tidak lengkap"
+          PY
 
       - name: Kemas zip & pecah jadi bagian <2 GB (batas GitHub release)
+        timeout-minutes: 15
         run: |
           zip -qr PosterBioskopAI-Model-AI.zip models
           split -b 1900m -d PosterBioskopAI-Model-AI.zip PosterBioskopAI-Model-AI.zip.part
@@ -150,11 +167,71 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Tempel bagian model ke release (saat push tag v*)
+      - name: Tempel bagian model + catatan rilis (saat push tag v*)
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
         run: |
-          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "PosterBioskopAI $GITHUB_REF_NAME" --notes "Poster AI generatif lokal (Stable Diffusion Turbo)."
-          gh release upload "$GITHUB_REF_NAME" PosterBioskopAI-Model-AI.zip.part* GABUNG-MODEL.bat --clobber --repo "$GITHUB_REPOSITORY"
+          set -e
+          AUTH="Authorization: Bearer $GH_TOKEN"
+          API="https://api.github.com/repos/$REPO"
+          get_id() {
+            curl -s -H "$AUTH" "$API/releases/tags/$TAG" | jq -r '.id // empty'
+          }
+          rel_id=$(get_id)
+          if [ -z "$rel_id" ]; then
+            echo "Release belum ada, membuat..."
+            curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" \
+              -d "{\"tag_name\":\"$TAG\",\"name\":\"PosterBioskopAI $TAG\",\"body\":\"Poster AI generatif lokal (Stable Diffusion Turbo).\"}" \
+              "$API/releases" > /tmp/rel.json
+            rel_id=$(jq -r '.id // empty' /tmp/rel.json)
+            if [ -z "$rel_id" ]; then
+              echo "Kemungkinan balapan dengan job lain, ambil ulang ID..."
+              sleep 5
+              rel_id=$(get_id)
+            fi
+          fi
+          test -n "$rel_id"
+          echo "Release ID: $rel_id"
+
+          body="PosterBioskopAI v2.0 — pembuat poster film dengan AI generatif yang berjalan 100% offline (Stable Diffusion Turbo, ONNX).
+
+          ## Paket unduhan
+          - **PosterBioskopAI.exe** — aplikasi utama (Windows 10/11 64-bit)
+          - **PosterBioskopAI-Model-AI.zip.part00 & part01** — model AI (±2,5 GB), wajib untuk mode AI penuh
+          - **GABUNG-MODEL.bat** — penggabung & pemasang model otomatis
+
+          ## Cara pasang (sekali saja)
+          1. Unduh EXE, kedua bagian model, dan GABUNG-MODEL.bat ke SATU folder.
+          2. Double-click GABUNG-MODEL.bat — model terpasang otomatis di folder models\\sd-turbo-onnx.
+          3. Double-click PosterBioskopAI.exe — status Model AI: SIAP, tanpa internet.
+
+          ## Baru di v2.0
+          - Mesin AI generatif Stable Diffusion Turbo (fp16) menggantikan 999 referensi gaya — key art benar-benar digambar AI sesuai prompt.
+          - Prompt default sinematik Hollywood + prompt manual yang bisa diterapkan ke semua video dengan satu tombol.
+          - Rasio 9:16 (Reels/TikTok/Story), 16:9, atau ikuti rasio video.
+          - Tipografi aman: judul dijamin tidak melewati batas kiri-kanan poster."
+          jq -n --arg body "$body" '{body: $body}' > /tmp/notes.json
+          curl -s -X PATCH -H "$AUTH" -H "Content-Type: application/json" \
+            -d @/tmp/notes.json "$API/releases/$rel_id" > /dev/null
+          echo "Catatan rilis diperbarui."
+
+          for f in PosterBioskopAI-Model-AI.zip.part* GABUNG-MODEL.bat; do
+            name=$(basename "$f")
+            size=$(stat -c%s "$f")
+            old=$(curl -s -H "$AUTH" "$API/releases/$rel_id/assets?per_page=100" | jq -r --arg n "$name" '.[] | select(.name==$n) | .id' | head -1)
+            if [ -n "$old" ]; then
+              echo "Hapus aset lama: $name (id $old)"
+              curl -s -X DELETE -H "$AUTH" "$API/releases/assets/$old" > /dev/null
+            fi
+            echo "Upload $name ($size byte)..."
+            curl -s -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
+              -T "$f" \
+              "$API/releases/$rel_id/assets?name=$name" > /tmp/up.json
+            jq -e --arg n "$name" --argjson s "$size" '.name==$n and .size==$s' /tmp/up.json > /dev/null \
+              || { echo "GAGAL upload $name:"; cat /tmp/up.json; exit 1; }
+            echo "  OK: $name"
+          done
+          echo "Semua bagian model + GABUNG-MODEL.bat sudah ada di release."
