@@ -34,7 +34,7 @@ jobs:
       - name: Build EXE (PyInstaller, font ikut dikemas)
         run: |
           python make_icon.py
-          pyinstaller --noconfirm --onefile --windowed --name PosterBioskopAI --icon=icon.ico --add-data "assets;assets" poster_app.py
+          pyinstaller --noconfirm --onefile --windowed --name PosterBioskopAI --icon=icon.ico --add-data "assets;assets" --collect-all onnxruntime poster_app.py
 
       - name: Simpan EXE sebagai artifact
         uses: actions/upload-artifact@v4
@@ -69,7 +69,7 @@ jobs:
       - name: Install dependensi
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pillow opencv-python-headless numpy regex onnxruntime
+          python -m pip install pillow==11.3.0 opencv-python-headless==4.13.0.90 numpy==2.1.3 regex==2026.4.4 onnxruntime==1.32.0
 
       - name: Unduh model AI lewat kode aplikasi (8 file, ~2,5 GB)
         timeout-minutes: 20
@@ -135,7 +135,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependensi minimal (untuk pengunduh model)
-        run: python -m pip install --quiet pillow numpy
+        run: python -m pip install --quiet pillow==11.3.0 numpy==2.1.3
 
       - name: Unduh model AI lewat kode aplikasi (8 file, ~2,5 GB)
         timeout-minutes: 20
@@ -200,7 +200,7 @@ jobs:
           test -n "$rel_id"
           echo "Release ID: $rel_id"
 
-          body="PosterBioskopAI v2.0 — pembuat poster film dengan AI generatif yang berjalan 100% offline (Stable Diffusion Turbo, ONNX).
+          body="PosterBioskopAI v2.0.1 — pembuat poster film dengan AI generatif yang berjalan 100% offline (Stable Diffusion Turbo, ONNX).
 
           ## Paket unduhan
           - **PosterBioskopAI.exe** — aplikasi utama (Windows 10/11 64-bit)
@@ -211,6 +211,10 @@ jobs:
           1. Unduh EXE, kedua bagian model, dan GABUNG-MODEL.bat ke SATU folder.
           2. Double-click GABUNG-MODEL.bat — model terpasang otomatis di folder models\\sd-turbo-onnx.
           3. Double-click PosterBioskopAI.exe — status Model AI: SIAP, tanpa internet.
+
+          ## Baru di v2.0.1
+          - Perbaikan stabilitas: setiap kesalahan kini tampil sebagai pesan dan terekam di log_kesalahan.txt di samping aplikasi — tidak ada lagi aplikasi menutup sendiri tanpa penjelasan.
+          - Bundel EXE membawa mesin AI (onnxruntime) lengkap; versi pustaka dipin ke kombinasi yang teruji.
 
           ## Baru di v2.0
           - Mesin AI generatif Stable Diffusion Turbo (fp16) menggantikan 999 referensi gaya — key art benar-benar digambar AI sesuai prompt.

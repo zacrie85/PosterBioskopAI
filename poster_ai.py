@@ -398,15 +398,26 @@ class PosterAI:
 
     # ------------------------------------------------------------ internal
     def _session(self, name):
-        import onnxruntime as ort
         if name in self._sess:
             return self._sess[name]
+        try:
+            import onnxruntime as ort
+        except Exception as exc:                       # noqa: BLE001
+            raise RuntimeError(
+                "Mesin AI (onnxruntime) tidak bisa dimuat di komputer ini: %r. "
+                "Detail teknis ada di log_kesalahan.txt di samping aplikasi." % (exc,))
         so = ort.SessionOptions()
-        so.intra_op_num_threads = max(1, (os.cpu_count() or 4))
+        so.intra_op_num_threads = min(16, max(1, (os.cpu_count() or 4)))
         so.inter_op_num_threads = 1
         so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        s = ort.InferenceSession(os.path.join(self.root, name, "model.onnx"),
-                                 so, providers=["CPUExecutionProvider"])
+        try:
+            s = ort.InferenceSession(os.path.join(self.root, name, "model.onnx"),
+                                     so, providers=["CPUExecutionProvider"])
+        except Exception as exc:                       # noqa: BLE001
+            raise RuntimeError(
+                "Model AI gagal dimuat (bagian %s): %r. Pastikan unduhan model "
+                "lengkap (tombol 🤖 Status Model AI); coba juga kualitas "
+                "\"Cepat (1 langkah)\" atau PC lain." % (name, exc))
         if self.keep_loaded:
             self._sess[name] = s
         return s

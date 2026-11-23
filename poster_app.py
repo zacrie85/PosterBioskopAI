@@ -2,6 +2,9 @@
 """
 PosterBioskopAI — aplikasi desktop OFFLINE pembuat poster film ala Hollywood.
 
+Versi 2.0.1 — perbaikan stabilitas: semua kesalahan (Python maupun crash level
+  sistem) kini dicatat ke log_kesalahan.txt di samping aplikasi dan ditampilkan
+  sebagai jendela pesan — tidak ada lagi mati diam-diam.
 Versi 2.0 — ROMBAKAN TOTAL:
   * Perpustakaan 999 referensi gaya DIHAPUS. Digantikan MESIN AI generatif
     (Stable Diffusion Turbo, ONNX, berjalan lokal tanpa internet).
@@ -23,10 +26,15 @@ Jalankan:  python poster_app.py
 Build EXE: lihat README_ID.txt / build_windows.bat
 """
 
+import faulthandler
 import os
 import queue
 import re
+import sys
 import threading
+import traceback
+from datetime import datetime
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
@@ -48,9 +56,38 @@ VIDEO_TYPES = [("Video", " ".join("*" + e for e in fp.VIDEO_EXTS)), ("Semua file
 IMG_TYPES = [("Gambar", "*.jpg *.jpeg *.png *.bmp *.webp"), ("Semua file", "*.*")]
 
 
+# ------------------------------------------------------------ log kesalahan
+def _log_path():
+    """Tempat log_kesalahan.txt: di samping aplikasi; kalau folder itu tidak
+    bisa ditulisi, pakai folder sementara Windows."""
+    if getattr(sys, "frozen", False):
+        base = os.path.dirname(sys.executable)
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    p = os.path.join(base, "log_kesalahan.txt")
+    try:
+        open(p, "a").close()
+        return p
+    except OSError:
+        import tempfile
+        return os.path.join(tempfile.gettempdir(), "PosterBioskopAI_log_kesalahan.txt")
+
+
+def catat_kesalahan(logf, tipe, nilai, tb):
+    """Catat traceback lengkap ke file log (semua penangkap crash memakai ini)."""
+    try:
+        logf.write("\n[%s] KESALAHAN: %s: %s\n" % (
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"), tipe.__name__, nilai))
+        traceback.print_exception(tipe, nilai, tb, file=logf)
+        logf.flush()
+    except Exception:                                  # noqa: BLE001
+        pass
+
+
 class PosterApp(tk.Tk):
-    def __init__(self):
+    def __init__(self, log=None):
         super().__init__()
+        self._log = log
         self.title("PosterBioskopAI — Pembuat Poster Film AI (Offline)")
         self.geometry("1200x800")
         self.minsize(1000, 660)
@@ -67,6 +104,16 @@ class PosterApp(tk.Tk):
         self._build_vars()
         self._build_ui()
         self.after(200, self._refresh_model_status)
+
+    def report_callback_exception(self, exc, val, tb):
+        """Tk memanggil ini untuk setiap error di callback UI:
+        catat ke log lalu tampilkan — jangan biarkan mati diam-diam."""
+        catat_kesalahan(self._log, exc, val, tb)
+        nama = exc.__name__ if isinstance(exc, type) else type(exc).__name__
+        messagebox.showerror(
+            "Terjadi kesalahan",
+            "%s: %s\n\nDetail teknis ada di log_kesalahan.txt di samping aplikasi."
+            % (nama, val))
 
     # ------------------------------------------------------------------ UI
     def _style_ui(self):
@@ -409,8 +456,13 @@ class PosterApp(tk.Tk):
                 poster = eng.compose_poster(art, judul, size=full, tagline=tagline,
                                             pemain=pemain, sutradara=sutradara)
             except Exception as exc:                       # noqa: BLE001
-                self.after(0, lambda: self.var_status.set(f"Gagal render: {exc}"))
                 self.after(0, lambda: self._render_done())
+                self.after(0, lambda: messagebox.showerror(
+                    "Gagal membuat poster",
+                    "%s: %s\n\nKalau ini terus terjadi, buka log_kesalahan.txt "
+                    "di samping aplikasi (atau kirim isinya)." % (
+                        exc.__class__.__name__, exc)))
+                self.after(0, lambda: self.var_status.set(f"Gagal render: {exc}"))
                 return
             self.after(0, lambda: self._show_preview(poster, preview))
         threading.Thread(target=work, daemon=True).start()
@@ -601,8 +653,29 @@ class PosterApp(tk.Tk):
 
 
 def main():
-    app = PosterApp()
-    app.mainloop()
+    # Semua jenis crash ditangkap dan dicatat ke log_kesalahan.txt di samping
+    # aplikasi: error Python (sys.excepthook), error di thread
+    # (threading.excepthook), error callback UI (report_callback_exception),
+    # dan crash native level sistem (faulthandler — mis. DLL rusak atau CPU
+    # tanpa instruksi AVX2).
+    logp = _log_path()
+    logf = open(logp, "a", encoding="utf-8", errors="replace")
+    logf.write("\n=== PosterBioskopAI dimulai %s | python %s | EXE=%s | cpu=%d ===\n" % (
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "%d.%d.%d" % sys.version_info[:3],
+        bool(getattr(sys, "frozen", False)),
+        os.cpu_count() or 0))
+    logf.flush()
+    faulthandler.enable(logf, all_threads=True)
+    sys.excepthook = lambda t, v, tb: catat_kesalahan(logf, t, v, tb)
+    threading.excepthook = lambda a: catat_kesalahan(
+        logf, a.exc_type, a.exc_value, a.exc_traceback)
+
+    app = PosterApp(log=logf)
+    try:
+        app.mainloop()
+    finally:
+        logf.close()
 
 
 if __name__ == "__main__":

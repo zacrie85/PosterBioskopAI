@@ -3,6 +3,13 @@
 Aplikasi desktop Windows pembuat poster film ala Hollywood dari video/foto
 kamu — kini dengan **mesin AI generatif sungguhan yang berjalan 100% offline**.
 
+## Yang baru di v2.0.1 (perbaikan stabilitas)
+
+Aplikasi tidak lagi mati diam-diam: SEMUA kesalahan — Python maupun crash level
+sistem (DLL/CPU) — kini dicatat ke `log_kesalahan.txt` di samping aplikasi dan
+ditampilkan sebagai jendela pesan. Bundel EXE juga dipastikan membawa mesin AI
+(onnxruntime) secara lengkap, dan versi pustaka dipin ke kombinasi yang teruji.
+
 ## Yang baru di v2.0 (rombak total)
 
 Perpustakaan 999 referensi gaya lama **dihapus seluruhnya**. Digantikan mesin
@@ -76,3 +83,12 @@ python batch_poster.py <folder> --prompt "poster malam kabut neon biru"
 * Build EXE sendiri: double-click `build_windows.bat`, atau biarkan GitHub
   Actions yang membangun (workflow `Build EXE + Model AI` berjalan otomatis
   saat push tag `v*`, hasil EXE + model langsung ditempel ke Release).
+
+## Kalau ada masalah
+
+* **Aplikasi menutup sendiri / poster gagal dibuat** — buka `log_kesalahan.txt`
+  di samping aplikasi: setiap penyebab kesalahan terekam di situ (sejak
+  v2.0.1). Kirim isinya kalau butuh bantuan.
+* **Model AI belum lengkap** — tombol "🤖 Status Model AI" untuk mengunduh
+  atau melanjutkan unduhan yang terputus.
+* **PC terasa lambat** — pilih kualitas "Cepat (1 langkah)" di menu Kualitas.

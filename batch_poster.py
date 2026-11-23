@@ -186,7 +186,13 @@ def main():
                     choices=list(ai.QUALITY_PRESETS.keys()))
     a = ap.parse_args()
 
-    res = run_batch(a.folder, a.out, a.rasio, a.prompt, a.kualitas, log=print)
+    try:
+        res = run_batch(a.folder, a.out, a.rasio, a.prompt, a.kualitas, log=print)
+    except (ValueError, RuntimeError) as exc:
+        # pesan ramah (folder kosong, model belum lengkap, mesin AI gagal) —
+        # bukan traceback mentah
+        print(f"GAGAL: {exc}")
+        sys.exit(1)
     for e in res["errors"]:
         print(f"  gagal: {e['sumber']} — {e['error']}")
     print(f"\nPoster AI tersimpan di: {res['out_dir']}")
