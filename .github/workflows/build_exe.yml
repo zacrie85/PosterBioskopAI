@@ -180,6 +180,7 @@ jobs:
           set -e
           AUTH="Authorization: Bearer $GH_TOKEN"
           API="https://api.github.com/repos/$REPO"
+          UP="https://uploads.github.com/repos/$REPO"
           get_id() {
             curl -s -H "$AUTH" "$API/releases/tags/$TAG" | jq -r '.id // empty'
           }
@@ -232,7 +233,7 @@ jobs:
             echo "Upload $name ($size byte)..."
             curl -s -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
               -T "$f" \
-              "$API/releases/$rel_id/assets?name=$name" > /tmp/up.json
+              "$UP/releases/$rel_id/assets?name=$name" > /tmp/up.json
             jq -e --arg n "$name" --argjson s "$size" '.name==$n and .size==$s' /tmp/up.json > /dev/null \
               || { echo "GAGAL upload $name:"; cat /tmp/up.json; exit 1; }
             echo "  OK: $name"
