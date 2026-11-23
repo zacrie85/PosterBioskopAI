@@ -22,6 +22,11 @@ Fitur kunci:
     galeri manual + pencarian + filter genre/era.
  4. Rasio: Poster 2:3, Potret 3:4, Kotak 1:1, Wallpaper 16:9.
  5. Simpan PNG/JPG resolusi tinggi (mis. 1000x1500).
+ 6. MODE BATCH: pilih satu FOLDER berisi video/foto -> poster
+    untuk SEMUA file sekaligus (tiap file di-analisis sendiri:
+    frame terbaik, judul dari nama file, gaya auto-match).
+    Hasil tersimpan di folder "<nama-folder>_poster" di sebelah
+    folder sumber. Ada progress bar, log, dan tombol Batal.
 
 CATATAN JUJUR SOAL "AI" & "999 REFERENSI"
 -----------------------------------------
@@ -54,6 +59,21 @@ B. Jadikan EXE ter-install style (disarankan):
    4. EXE ini bisa dicopy ke PC Windows lain TANPA install
       Python (satu file, standalone, offline).
 
+C. TANPA install Python sama sekali:
+   Unduh  PosterBioskopAI.exe  dari halaman Releases repo
+   GitHub ini — EXE dibangun otomatis oleh GitHub Actions
+   (runner Windows asli) setiap kali ada tag rilis baru.
+
+MODE BATCH DARI TERMINAL (tanpa GUI)
+------------------------------------
+   python batch_poster.py "D:\video-kegiatan"
+   python batch_poster.py folder --rasio "Wallpaper 16:9"
+   python batch_poster.py folder --gaya REF-289 --out hasil
+
+   Tanpa --gaya  : tiap file di-auto-match gayanya sendiri.
+   Dengan --gaya : SATU referensi dipakai untuk semua file.
+   Tanpa --out   : hasil ke folder "<folder>_poster" di sebelahnya.
+
 FORMAT VIDEO YANG DIDUKUNG
 --------------------------
 MP4, MOV, MKV, AVI, WEBM, M4V, MPG, TS, WMV, 3GP
@@ -72,6 +92,7 @@ TIPS HASIL POSTER BAGUS
 STRUKTUR FILE
 -------------
   poster_app.py      GUI aplikasi (Tkinter)
+  batch_poster.py    mode batch: folder -> banyak poster (juga CLI)
   poster_engine.py   mesin render poster (grading, teks, efek)
   style_library.py   999 referensi gaya + auto-match
   frame_picker.py    pilih frame terbaik + judul dari nama video
@@ -79,6 +100,7 @@ STRUKTUR FILE
   requirements.txt   daftar dependensi
   build_windows.bat  skrip build EXE Windows
   rilis_github.bat   skrip upload proyek ke GitHub (aman)
+  .github/workflows/ build EXE otomatis di runner Windows GitHub
   LICENSE            lisensi MIT
   .gitignore         file yang diabaikan git
   icon.ico           ikon aplikasi (dibuat oleh make_icon.py)

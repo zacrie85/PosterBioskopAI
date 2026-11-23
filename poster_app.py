@@ -15,6 +15,7 @@ Build EXE: lihat README_ID.txt / build_windows.bat
 """
 
 import os
+import queue
 import re
 import threading
 import tkinter as tk
@@ -23,6 +24,7 @@ from functools import partial
 
 from PIL import Image, ImageTk
 
+import batch_poster as bp
 import poster_engine as eng
 import frame_picker as fp
 import style_library as lib
@@ -94,6 +96,7 @@ class PosterApp(tk.Tk):
         self.var_pemain = tk.StringVar()
         self.var_sutradara = tk.StringVar()
         self.var_rasio = tk.StringVar(value="Poster 2:3")
+        self.var_batch_rasio = tk.StringVar(value="Poster 2:3")
         self.var_auto = tk.BooleanVar(value=True)
         self.var_file = tk.StringVar(value="Belum ada video/foto dipilih")
         self.var_gaya = tk.StringVar(value="Gaya: menunggu sumber…")
@@ -154,6 +157,27 @@ class PosterApp(tk.Tk):
                    command=self.buat_poster).pack(fill="x", pady=(12, 4))
         ttk.Button(left, text="💾  Simpan Poster Resolusi Tinggi…",
                    style="Gold.TButton", command=self.simpan).pack(fill="x")
+
+        f4 = ttk.Labelframe(left, text=" MODE BATCH ", padding=8)
+        f4.pack(fill="x", pady=(10, 0))
+        ttk.Label(f4, text="Satu folder video/foto → poster untuk SEMUA file "
+                           "(judul & gaya otomatis per file).",
+                  style="Dim.TLabel", wraplength=330, justify="left").pack(anchor="w")
+        rowb = ttk.Frame(f4)
+        rowb.pack(fill="x", pady=(6, 0))
+        ttk.Label(rowb, text="Gaya:", style="Panel.TLabel").pack(side="left")
+        self.cmb_batch_gaya = ttk.Combobox(rowb, state="readonly", width=22,
+                                           values=["Auto-match per video",
+                                                   "Pakai gaya terpilih di atas"])
+        self.cmb_batch_gaya.set("Auto-match per video")
+        self.cmb_batch_gaya.pack(side="left", padx=6)
+        rowb2 = ttk.Frame(f4)
+        rowb2.pack(fill="x", pady=(4, 0))
+        ttk.Label(rowb2, text="Rasio:", style="Panel.TLabel").pack(side="left")
+        ttk.Combobox(rowb2, textvariable=self.var_batch_rasio, state="readonly",
+                     values=list(eng.RATIOS.keys()), width=16).pack(side="left", padx=6)
+        ttk.Button(f4, text="📦  Batch: Pilih Folder & Buat Semua…",
+                   style="Gold.TButton", command=self.batch_folder).pack(fill="x", pady=(6, 2))
 
         # ---------------- kolom kanan: preview ----------------
         right = ttk.Frame(root)
@@ -362,6 +386,111 @@ class PosterApp(tk.Tk):
             messagebox.showinfo("Tersimpan!", f"Poster tersimpan di:\n{path}")
         else:
             messagebox.showerror("Gagal simpan", err)
+
+    # ------------------------------------------------------- mode batch
+    def batch_folder(self):
+        folder = filedialog.askdirectory(title="Pilih folder berisi video/foto untuk batch")
+        if not folder:
+            return
+        pakai_gaya_terpilih = self.cmb_batch_gaya.get().startswith("Pakai")
+        if pakai_gaya_terpilih and not self.style:
+            messagebox.showinfo(
+                "Belum ada gaya terpilih",
+                "Untuk mode \"Pakai gaya terpilih\", pilih dulu video/foto atau gaya "
+                "lewat Galeri. Atau pakai \"Auto-match per video\".")
+            return
+        try:
+            files = bp.collect_media(folder)
+        except (NotADirectoryError, ValueError) as exc:
+            messagebox.showerror("Gagal", str(exc))
+            return
+        if not files:
+            messagebox.showinfo(
+                "Folder kosong",
+                "Tidak ada video/foto yang dikenali di folder itu.\n"
+                "Format yang didukung: " + " ".join(fp.VIDEO_EXTS + bp.IMG_EXTS))
+            return
+        style_id = self.style["id"] if pakai_gaya_terpilih else None
+        self._open_batch_dialog(folder, len(files), self.var_batch_rasio.get(), style_id)
+
+    def _open_batch_dialog(self, folder, n, ratio, style_id):
+        q = queue.Queue()
+        win = tk.Toplevel(self)
+        win.title(f"Mode Batch — {n} file")
+        win.geometry("640x440")
+        win.configure(bg=BG)
+
+        head = ttk.Frame(win, padding=(12, 10))
+        head.pack(fill="x")
+        ttk.Label(head, text=f"{n} file akan dirender ({ratio})", style="Gold.TLabel").pack(anchor="w")
+        bar = ttk.Progressbar(win, maximum=n, length=560)
+        bar.pack(fill="x", padx=12)
+        lbl_file = ttk.Label(win, text="Menyiapkan…", style="TLabel", padding=(12, 6))
+        lbl_file.pack(fill="x")
+
+        body = ttk.Frame(win)
+        body.pack(fill="both", expand=True, padx=12)
+        txt = tk.Text(body, height=11, bg="#101018", fg=FG, bd=0,
+                      insertbackground=FG, wrap="word")
+        sb = ttk.Scrollbar(body, orient="vertical", command=txt.yview)
+        txt.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        txt.pack(side="left", fill="both", expand=True)
+
+        cancel = {"v": False}
+        btn_cancel = ttk.Button(win, text="Batalkan", command=lambda: cancel.update(v=True))
+        btn_cancel.pack(pady=8)
+
+        def log(msg):
+            q.put(("log", msg))
+
+        def prog(done, total, name):
+            q.put(("prog", done, total, name))
+
+        def finish(res):
+            bar["value"] = res.get("ok", 0)
+            lbl_file.config(text=f"Selesai: {res.get('ok', 0)} poster berhasil, "
+                                 f"{res.get('gagal', 0)} gagal"
+                                 + (" (dibatalkan)" if res.get("dibatalkan") else ""))
+            btn_cancel.config(state="disabled", text="Tutup")
+            out = res.get("out_dir", folder)
+            if messagebox.askyesno("Batch selesai",
+                                   f"Poster: {res.get('ok', 0)} berhasil, {res.get('gagal', 0)} gagal.\n"
+                                   f"Folder hasil:\n{out}\n\nBuka folder hasil?"):
+                bp.open_folder(out)
+
+        def poll():
+            try:
+                while True:
+                    msg = q.get_nowait()
+                    kind = msg[0]
+                    if kind == "log":
+                        txt.insert("end", msg[1] + "\n")
+                        txt.see("end")
+                    elif kind == "prog":
+                        _, done, total, name = msg
+                        bar["maximum"] = max(1, total)
+                        bar["value"] = done
+                        lbl_file.config(text=name or "Merender…")
+                    elif kind == "done":
+                        finish(msg[1])
+                        return                      # berhenti polling
+            except queue.Empty:
+                pass
+            win.after(120, poll)
+
+        def work():
+            try:
+                res = bp.run_batch(folder, None, ratio, style_id,
+                                   log=log, progress=prog,
+                                   should_continue=lambda: not cancel["v"])
+            except Exception as exc:                # noqa: BLE001
+                q.put(("log", f"GAGAL: {exc}"))
+                res = {"ok": 0, "gagal": 1, "dibatalkan": False, "out_dir": folder}
+            q.put(("done", res))
+
+        threading.Thread(target=work, daemon=True).start()
+        poll()
 
     # ------------------------------------------------------- galeri 999
     def open_gallery(self):

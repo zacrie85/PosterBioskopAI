@@ -27,8 +27,11 @@ cetak banner yang ingin poster bergaya poster bioskop tanpa perlu belajar desain
 
 ## Instalasi (Windows)
 
-1. Install [Python 3.9+](https://www.python.org/downloads/) — centang *Add to PATH*.
-2. Buka Command Prompt di folder ini, lalu:
+1. **Paling gampang — tanpa install apa pun:** buka halaman
+   [Releases](https://github.com/zacrie85/PosterBioskopAI/releases) dan unduh
+   `PosterBioskopAI.exe` (dibangun otomatis oleh GitHub Actions di Windows asli).
+2. Atau pakai Python: install [Python 3.9+](https://www.python.org/downloads/)
+   (centang *Add to PATH*), lalu di Command Prompt:
    ```
    pip install -r requirements.txt
    python poster_app.py
@@ -38,6 +41,23 @@ cetak banner yang ingin poster bergaya poster bioskop tanpa perlu belajar desain
 
 Di Linux/macOS langkahnya sama; font Judul memakai Impact/Arial Black bawaan
 Windows, atau otomatis fallback ke DejaVu/Liberation di sistem lain.
+
+## Mode batch — satu folder, banyak poster
+
+Butuh poster untuk 30 video sekaligus? Pakai **MODE BATCH**:
+
+- **Dari aplikasi:** klik **📦 Batch: Pilih Folder & Buat Semua…** di panel kiri.
+  Pilih folder berisi video/foto → tiap file dianalisis sendiri (frame terbaik,
+  judul dari nama file, auto-match gaya) → semua poster tersimpan di folder
+  `<nama-folder>_poster` di sebelah folder sumber. Ada progress bar, log, dan
+  tombol Batal.
+- **Dari terminal / tanpa GUI:**
+  ```
+  python batch_poster.py "D:\video-kegiatan" --rasio "Wallpaper 16:9"
+  python batch_poster.py folder --gaya REF-289 --out hasil
+  ```
+  (`--gaya` = pakai SATU referensi untuk semua file; tanpa itu = auto-match per
+  file. `--out` = folder hasil kustom.)
 
 ## Contoh hasil
 
@@ -54,10 +74,12 @@ dalam hitungan detik.
 | File | Isi |
 | --- | --- |
 | `poster_app.py` | GUI aplikasi (Tkinter) |
+| `batch_poster.py` | Mode batch: folder → banyak poster (juga CLI) |
 | `poster_engine.py` | Mesin render: grading, tipografi, efek |
 | `style_library.py` | 999 referensi gaya + mesin auto-match |
 | `frame_picker.py` | Ekstraksi frame terbaik + judul dari nama video |
 | `build_windows.bat` | Build EXE (PyInstaller) |
+| `.github/workflows/` | Build EXE otomatis di runner Windows GitHub |
 | `rilis_github.bat` | Upload proyek ini ke repo GitHub-mu |
 | `contoh/` | Video uji + contoh poster |
 

@@ -1,0 +1,49 @@
+name: Build EXE Windows
+
+# Membangun PosterBioskopAI.exe dengan PyInstaller di runner Windows asli.
+# - Bisa dijalankan manual: tab Actions -> Build EXE Windows -> Run workflow
+# - Otomatis saat push tag v* (EXE langsung ditempel ke release tsb)
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+
+      - name: Siapkan Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependensi
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Build EXE (PyInstaller)
+        run: |
+          python make_icon.py
+          pyinstaller --noconfirm --onefile --windowed --name PosterBioskopAI --icon=icon.ico poster_app.py
+
+      - name: Simpan EXE sebagai artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PosterBioskopAI-Windows-EXE
+          path: dist/PosterBioskopAI.exe
+          if-no-files-found: error
+
+      - name: Tempel EXE ke release (saat push tag v*)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: gh release upload $env:GITHUB_REF_NAME dist/PosterBioskopAI.exe --clobber --repo $env:GITHUB_REPOSITORY
