@@ -126,6 +126,9 @@ jobs:
   build-model:
     runs-on: ubuntu-latest
     steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+
       - name: Siapkan Python 3.11
         uses: actions/setup-python@v5
         with:
