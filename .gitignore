@@ -1,0 +1,18 @@
+# build artefak PyInstaller
+dist/
+build/
+*.spec
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# hasil render & uji
+contoh_poster/
+*.avi
+*.mp4
+
+# sistem
+Thumbs.db
+.DS_Store
