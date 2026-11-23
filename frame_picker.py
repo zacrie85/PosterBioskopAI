@@ -82,7 +82,7 @@ def extract_best_frame(video_path, max_samples=48, progress=None):
 
     Returns:
         (PIL.Image frame, stats gabungan, info dict)
-        stats kompatibel dengan style_library.match_styles (tanpa 'sharp').
+        stats = statistik warna ringan (tidak dipakai AI, disimpan untuk info).
     Raises:
         ValueError bila video tidak bisa dibuka.
     """

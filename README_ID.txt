@@ -1,134 +1,78 @@
-=====================================================
- PosterBioskopAI — Pembuat Poster Film Ala Hollywood
-        Aplikasi Desktop OFFLINE untuk Windows
-=====================================================
+# README — PosterBioskopAI
 
-APA INI?
---------
-Aplikasi yang mengubah video atau foto jadi poster film ala
-poster Hollywood (cover film): color grading sinematik, judul
-besar auto-fit, tagline, nama pemain, billing block, dan strip
-"SEGERA DI BIOSKOP".
+Aplikasi desktop Windows pembuat poster film ala Hollywood dari video/foto
+kamu — kini dengan **mesin AI generatif sungguhan yang berjalan 100% offline**.
 
-Fitur kunci:
- 1. Pilih VIDEO -> judul poster OTOMATIS diambil dari NAMA
-    VIDEO (contoh: "VID_20240102_lomba_fisika.mp4" menjadi
-    judul "Lomba Fisika"). Bisa diedit manual kapan saja.
- 2. Frame terbaik dipilih OTOMATIS dari video (dinilai dari
-    ketajaman gambar, pencahayaan, dan kontras).
- 3. Gaya poster dipilih OTOMATIS dari 999 referensi gaya
-    poster Hollywood yang dibundel di aplikasi (paduan genre,
-    era, palet warna, tipografi, dan komposisi). Ada juga
-    galeri manual + pencarian + filter genre/era.
- 4. Rasio: Poster 2:3, Potret 3:4, Kotak 1:1, Wallpaper 16:9.
- 5. Simpan PNG/JPG resolusi tinggi (mis. 1000x1500).
- 6. MODE BATCH: pilih satu FOLDER berisi video/foto -> poster
-    untuk SEMUA file sekaligus (tiap file di-analisis sendiri:
-    frame terbaik, judul dari nama file, gaya auto-match).
-    Hasil tersimpan di folder "<nama-folder>_poster" di sebelah
-    folder sumber. Ada progress bar, log, dan tombol Batal.
+## Yang baru di v2.0 (rombak total)
 
-CATATAN JUJUR SOAL "AI" & "999 REFERENSI"
------------------------------------------
-- Aplikasi ini 100% OFFLINE: tidak ada data yang dikirim ke
-  internet, tidak perlu API key.
-- "AI"-nya adalah mesin pencocok cerdas yang berjalan lokal:
-  menganalisis kecerahan, kontras, saturasi, nuansa warna, dan
-  area gelap foto/frame, lalu memilih gaya paling cocok dari
-  999 referensi. Bukan AI generatif cloud, tapi hasilnya
-  konsisten dan instan.
-- 999 referensinya adalah GAYA yang di-generate (bukan gambar
-  poster film asli, karena poster asli berhak cipta). Setiap
-  referensi punya preview poster sendiri di galeri.
+Perpustakaan 999 referensi gaya lama **dihapus seluruhnya**. Digantikan mesin
+AI generatif **Stable Diffusion Turbo** (format ONNX, CPU): frame terbaik dari
+video di-"gambar ulang" AI menjadi key art poster sinematik sesuai prompt.
 
-CARA PAKAI DI WINDOWS (pilih salah satu)
-----------------------------------------
-A. Jalankan langsung dengan Python (paling gampang):
-   1. Install Python 3.9+ dari python.org (centang
-      "Add Python to PATH" saat install).
-   2. Double-click build_windows.bat TIDAK perlu kalau hanya
-      mau jalan; cukup:
-         pip install -r requirements.txt
-         python poster_app.py
+* **Prompt bawaan otomatis terisi**:
+  "Rubahlah gambar ini menjadi poster untuk sebuah film Hollywood dengan
+  menggunakan judul video sebagai judul di poster, buat poster dengan gaya
+  modern sinematik"
+* **Prompt manual**: kotak prompt boleh diedit bebas (kata kunci Indonesia
+  otomatis diterjemahkan ke kata kunci gaya yang dipahami AI).
+* **Tombol "Terapkan ke Semua Video"**: satu prompt dipakai untuk semua file
+  yang diproses mode batch.
+* **Rasio poster**: Ikuti rasio video, 9:16 (Story/Reels), 16:9 (Layar).
+* **Tulisannya rapi**: judul auto-fit 1-3 baris dan dijamin tidak melewati
+  batas kiri/kanan gambar (margin aman ~5%), lengkap dengan scrim gelap,
+  tagline, garis emas, dan strip rilis gaya poster bioskop modern.
+* **4 tingkat kualitas AI**: Cepat (1 langkah) → Maksimal (4 langkah).
+* **Variasi**: tombol 🎲 mengacak seed — frame sama, hasil AI berbeda.
 
-B. Jadikan EXE ter-install style (disarankan):
-   1. Install Python 3.9+ (centang Add to PATH).
-   2. Double-click  build_windows.bat
-   3. Tunggu 2-5 menit. Hasilnya:
-         dist\PosterBioskopAI.exe
-   4. EXE ini bisa dicopy ke PC Windows lain TANPA install
-      Python (satu file, standalone, offline).
+## Struktur folder
 
-C. TANPA install Python sama sekali:
-   Unduh  PosterBioskopAI.exe  dari halaman Releases repo
-   GitHub ini — EXE dibangun otomatis oleh GitHub Actions
-   (runner Windows asli) setiap kali ada tag rilis baru.
+| File | Fungsi |
+| --- | --- |
+| `poster_app.py` | GUI utama (Tkinter) |
+| `poster_ai.py` | Mesin AI: SD-Turbo img2img + unduh model + penerjemah prompt |
+| `poster_engine.py` | Tipografi & finishing poster (margin aman) |
+| `frame_picker.py` | Pemilih frame terbaik dari video + judul dari nama file |
+| `batch_poster.py` | Mode batch (GUI & CLI) |
+| `assets/fonts/` | Font Anton & Bebas Neue (lisensi OFL) |
+| `models/sd-turbo-onnx/` | Model AI (~2,7 GB) — diunduh/pasang sekali |
 
-MODE BATCH DARI TERMINAL (tanpa GUI)
-------------------------------------
-   python batch_poster.py "D:\video-kegiatan"
-   python batch_poster.py folder --rasio "Wallpaper 16:9"
-   python batch_poster.py folder --gaya REF-289 --out hasil
+## Pasang model AI (sekali saja, ~2,7 GB)
 
-   Tanpa --gaya  : tiap file di-auto-match gayanya sendiri.
-   Dengan --gaya : SATU referensi dipakai untuk semua file.
-   Tanpa --out   : hasil ke folder "<folder>_poster" di sebelahnya.
+**Cara 1 — dari dalam aplikasi (paling mudah):** buka aplikasi → tombol
+"🤖 Status Model AI…" → "⬇ Unduh / Lanjutkan Model AI". Unduhan bisa
+dilanjutkan kalau terputus.
 
-FORMAT VIDEO YANG DIDUKUNG
---------------------------
-MP4, MOV, MKV, AVI, WEBM, M4V, MPG, TS, WMV, 3GP
-(diproses oleh OpenCV yang dibundel saat build EXE).
+**Cara 2 — manual dari halaman Release:** download
+`PosterBioskopAI-Model-AI.zip.part00` dan `.part01`, taruh di folder EXE,
+lalu double-click `GABUNG-MODEL.bat`.
 
-TIPS HASIL POSTER BAGUS
------------------------
-- Pakai video resolusi 720p ke atas; frame terbaik otomatis
-  diambil dari bagian video yang paling tajam.
-- Foto orang: rasio Poster 2:3 paling mirip poster bioskop.
-- Judul pendek (1-3 kata) terlihat paling "Hollywood".
-- Kalau hasil auto-match kurang sreg, buka Galeri dan pilih
-  manual — ada 999 pilihan, dari Grindhouse 70-an sampai
-  Teaser Modern.
+Setelah terpasang, aplikasi tidak butuh internet lagi.
 
-STRUKTUR FILE
--------------
-  poster_app.py      GUI aplikasi (Tkinter)
-  batch_poster.py    mode batch: folder -> banyak poster (juga CLI)
-  poster_engine.py   mesin render poster (grading, teks, efek)
-  style_library.py   999 referensi gaya + auto-match
-  frame_picker.py    pilih frame terbaik + judul dari nama video
-  make_icon.py       membuat icon.ico
-  requirements.txt   daftar dependensi
-  build_windows.bat  skrip build EXE Windows
-  rilis_github.bat   skrip upload proyek ke GitHub (aman)
-  .github/workflows/ build EXE otomatis di runner Windows GitHub
-  LICENSE            lisensi MIT
-  .gitignore         file yang diabaikan git
-  icon.ico           ikon aplikasi (dibuat oleh make_icon.py)
+## Cara pakai
 
-LISENSI & HAK CIPTA
--------------------
-Kode boleh kamu pakai/modifikasi bebas untuk keperluan pribadi (MIT,
-lihat LICENSE). Aplikasi memakai font bawaan Windows (Impact, Arial
-Black, Georgia) atau fallback font bebas (DejaVu/Liberation) di sistem
-lain. Poster yang dihasilkan memakai foto/video milikmu sendiri.
+1. **Pilih VIDEO** — judul poster otomatis dari nama file, frame terbaik
+   dipilih otomatis (ketajaman × exposure × kontras). Atau pilih FOTO.
+2. Atur **prompt** (default sudah terisi) dan **rasio** (9:16 / 16:9 / ikuti
+   video), pilih kualitas AI.
+3. **BUAT POSTER DENGAN AI!** — 10-90 detik tergantung CPU. Preview muncul;
+   coba 🎲 Variasi Baru kalau mau hasil lain.
+4. **Simpan** resolusi tinggi (PNG/JPG), atau pakai **Mode Batch** untuk satu
+   folder video sekaligus (prompt yang sama untuk semua).
 
-CARA RILIS KE GITHUB (2 menit)
-------------------------------
-1. Buat repo KOSONG di github.com (New repository, tanpa README).
-2. Install Git dari git-scm.com (sekali saja).
-3. Double-click  rilis_github.bat
-4. Tempel URL repo, contoh: https://github.com/USERNAME/PosterBioskopAI.git
-5. Saat git push meminta login:
-      Username = username GitHub kamu
-      Password = token GitHub baru (ghp_...) — input tersembunyi,
-                 TIDAK disimpan di file mana pun.
-6. Selesai — kode naik ke repo kamu.
+CLI batch:
+```
+python batch_poster.py <folder> --rasio "9:16" --kualitas "Normal (2 langkah)"
+python batch_poster.py <folder> --prompt "poster malam kabut neon biru"
+```
 
-KEAMANAN TOKEN
---------------
-Jangan pernah menulis token di dalam kode, README, atau mengirimnya
-lewat chat (sekali terkirim, anggap bocor: segera REVOKE di
-github.com -> Settings -> Developer settings -> Personal access
-tokens). Skrip rilis ini sengaja meminta token lewat prompt tersembunyi
-git, bukan menyimpannya.
+## Spek & catatan
 
+* Windows 10/11 (atau Linux/macOS dengan Python), RAM 8 GB disarankan,
+  ruang disk ~4 GB (EXE + model).
+* Generasi AI di CPU: ±10-30 detik per langkah pada PC modern.
+* Model AI memakai bobot Stable Diffusion Turbo (Stability AI,
+  Non-Commercial Community License) — dipakai untuk keperluan pribadi/non-
+  komersial. Kode aplikasi: MIT (lihat LICENSE).
+* Build EXE sendiri: double-click `build_windows.bat`, atau biarkan GitHub
+  Actions yang membangun (workflow `Build EXE + Model AI` berjalan otomatis
+  saat push tag `v*`, hasil EXE + model langsung ditempel ke Release).

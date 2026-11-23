@@ -16,3 +16,8 @@ contoh_poster/
 # sistem
 Thumbs.db
 .DS_Store
+
+# v2.0: model AI & hasil uji workflow
+models/
+hasil_ai/
+video_uji/

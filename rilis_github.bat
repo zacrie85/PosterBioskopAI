@@ -32,7 +32,7 @@ echo.
 echo [1/5] Menyiapkan repository lokal...
 if not exist .git git init
 git add .
-git commit -m "PosterBioskopAI: aplikasi pembuat poster film ala Hollywood (offline, 999 referensi gaya)" 2>nul
+git commit -m "PosterBioskopAI: aplikasi pembuat poster film ala Hollywood (offline, gaya AI generatif)" 2>nul
 git branch -M main
 
 echo [2/5] Menghubungkan ke repo kamu...

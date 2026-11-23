@@ -12,19 +12,19 @@ if errorlevel 1 (
     py make_icon.py
 )
 
-echo [2/4] Meng-install dependensi (pillow, opencv, pyinstaller)...
+echo [2/4] Meng-install dependensi (pillow, opencv, onnxruntime, pyinstaller)...
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 if errorlevel 1 (
     py -m pip install -r requirements.txt
 )
 
-echo [3/4] Membangun EXE dengan PyInstaller (butuh 2-5 menit)...
+echo [3/4] Membangun EXE dengan PyInstaller (butuh 3-8 menit)...
 pyinstaller --noconfirm --onefile --windowed --name PosterBioskopAI ^
-    --icon=icon.ico poster_app.py
+    --icon=icon.ico --add-data "assets;assets" poster_app.py
 if errorlevel 1 (
     pyinstaller --noconfirm --onefile --windowed --name PosterBioskopAI ^
-        --icon=icon.ico poster_app.py
+        --icon=icon.ico --add-data "assets;assets" poster_app.py
 )
 
 echo [4/4] Selesai!

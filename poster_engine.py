@@ -1,52 +1,53 @@
 # -*- coding: utf-8 -*-
 """
-PosterBioskopAI — mesin render poster film sinematik, 100% offline (Pillow).
+PosterBioskopAI — mesin tipografi & finishing poster (Pillow, 100% offline).
 
-Alur: foto/frame video -> color grading sinematik per genre -> efek (vignette,
-grain, bloom, letterbox) -> tipografi ala poster Hollywood (judul auto-fit,
-tagline, billing block, strip rilis).
+Setelah AI menggambar key art (poster_ai.py), modul ini yang:
+  1. memasang scrim gelap agar tulisan terbaca,
+  2. menulis JUDUL (otomatis dari nama video) dengan auto-fit dan — penting —
+     JAMINAN MARGIN AMAN: setiap baris teks diukur dan dipaksa muat di dalam
+     batas kiri-kanan (max_width), tidak pernah melewati pinggir gambar,
+  3. menambah tagline / pemain / sutradara bila diisi, garis aksen emas,
+     strip rilis dan studio.
+
+Ukuran output mengikuti rasio: 9:16 (Story/Reels), 16:9 (Layar), atau
+mengikuti rasio video sumber.
 """
 
 import math
-import random
+import os
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageChops, ImageOps, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 RESAMPLE = getattr(Image, "Resampling", Image).LANCZOS
 
 # ---------------------------------------------------------------------------
-# Font: cari font bawaan Windows dulu (Impact, Arial Black, Georgia), lalu
-# fallback ke font bebas (DejaVu / Liberation / Noto) supaya jalan di mana saja.
+# Font: pakai font bawaan aplikasi di assets/fonts dulu (Anton & Bebas Neue,
+# gaya poster sinematik), lalu font Windows (Impact), lalu fallback bebas.
 # ---------------------------------------------------------------------------
+_HERE = os.path.dirname(os.path.abspath(__file__))
 FONT_DIRS = [
+    os.path.join(_HERE, "assets", "fonts"),
     "C:/Windows/Fonts",
     "/usr/share/fonts/truetype/dejavu",
     "/usr/share/fonts/truetype/liberation",
-    "/usr/share/fonts/truetype/chinese",
     "/usr/share/fonts",
-    "/System/Library/Fonts",
-    "/Library/Fonts",
 ]
 
-_DISPLAY_FONTS = ["impact.ttf", "ariblk.ttf", "DejaVuSans-Bold.ttf",
-                  "LiberationSans-Bold.ttf", "NotoSansSC-Bold.ttf"]
 FONT_CANDIDATES = {
-    "impact": _DISPLAY_FONTS,
-    "display": _DISPLAY_FONTS,
-    "block":    ["ariblk.ttf", "impact.ttf", "DejaVuSans-Bold.ttf",
-                 "LiberationSans-Bold.ttf", "NotoSansSC-Bold.ttf"],
-    "serif":    ["georgiab.ttf", "timesbd.ttf", "DejaVuSerif-Bold.ttf",
-                 "LiberationSerif-Bold.ttf", "NotoSerifSC-Bold.ttf"],
-    "condensed": ["consolab.ttf", "arial.ttf", "DejaVuSansMono-Bold.ttf",
-                  "LiberationMono-Bold.ttf", "NotoSansSC-Regular.ttf"],
+    "display": ["Anton-Regular.ttf", "impact.ttf", "BebasNeue-Regular.ttf",
+                "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf"],
+    "credit":  ["BebasNeue-Regular.ttf", "Anton-Regular.ttf",
+                "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf"],
+    "serif":   ["BebasNeue-Regular.ttf", "georgiab.ttf",
+                "DejaVuSerif-Bold.ttf", "LiberationSerif-Bold.ttf"],
 }
 
-_font_files = {}   # role -> path
-_font_cache = {}   # (role, size) -> ImageFont
+_font_files = {}
+_font_cache = {}
 
 
 def _resolve_font_files():
-    import os
     for role, names in FONT_CANDIDATES.items():
         for name in names:
             for d in FONT_DIRS:
@@ -56,9 +57,8 @@ def _resolve_font_files():
                     break
             if role in _font_files:
                 break
-    # jaring pengaman: role apa pun yang gagal resolve memakai font display
-    fallback = _font_files.get("display") or _font_files.get("condensed")
-    for role in set(FONT_CANDIDATES) | {"impact"}:
+    fallback = _font_files.get("display")
+    for role in set(FONT_CANDIDATES):
         if _font_files.get(role) is None:
             _font_files[role] = fallback
 
@@ -66,7 +66,7 @@ def _resolve_font_files():
 def get_font(role, size):
     if not _font_files:
         _resolve_font_files()
-    if _font_files.get(role) is None:      # role tak dikenal -> pakai display
+    if _font_files.get(role) is None:
         role = "display"
     key = (role, int(size))
     if key not in _font_cache:
@@ -79,196 +79,54 @@ def get_font(role, size):
     return _font_cache[key]
 
 
-def font_file_for(role):
-    if not _font_files:
-        _resolve_font_files()
-    return _font_files.get(role)
-
-
 # ---------------------------------------------------------------------------
-# Ukuran render
-# ---------------------------------------------------------------------------
-RATIOS = {          # nama yang tampil di UI -> rasio (w/h)
-    "Poster 2:3": 2 / 3,
-    "Potret 3:4": 3 / 4,
-    "Kotak 1:1": 1.0,
-    "Wallpaper 16:9": 16 / 9,
-}
-
-FULL_SIZES = {
-    "Poster 2:3": (1000, 1500),
-    "Potret 3:4": (1125, 1500),
-    "Kotak 1:1": (1200, 1200),
-    "Wallpaper 16:9": (1600, 900),
-}
-
-
-def preview_size(ratio_key, max_h=760, max_w=920):
-    """Ukuran preview yang pas di jendela (menjaga rasio)."""
-    r = RATIOS.get(ratio_key, 2 / 3)
-    w, h = int(max_h * r), max_h
-    if w > max_w:
-        w, h = max_w, int(max_w / r)
-    return (max(2, w // 2 * 2), max(2, h // 2 * 2))
-
-
-# ---------------------------------------------------------------------------
-# Util gambar dasar
+# Util gambar
 # ---------------------------------------------------------------------------
 def cover_crop(img, ratio, focus=0.45):
-    """Potong gambar agar pas rasio (cover). focus: 0=atas, 0.5=tengah (untuk wajah)."""
+    """Potong gambar agar pas rasio (cover). focus: 0=atas, 0.5=tengah."""
     w, h = img.size
-    if w / h > ratio:              # terlalu lebar -> potong kiri-kanan
+    if w / h > ratio:
         tw = int(h * ratio)
         x0 = (w - tw) // 2
         return img.crop((x0, 0, x0 + tw, h))
-    th = int(w / ratio)            # terlalu tinggi -> potong atas-bawah (bias fokus)
+    th = int(w / ratio)
     y0 = int(max(0, min(h - th, (h - th) * focus)))
     return img.crop((0, y0, w, y0 + th))
 
 
-def color_grade(img, gr):
-    """Color grading: brightness/contrast/saturation + split-toning shadow/highlight."""
-    img = ImageEnhance.Brightness(img).enhance(gr.get("bri", 1.0))
-    img = ImageEnhance.Contrast(img).enhance(gr.get("con", 1.0))
-    img = ImageEnhance.Color(img).enhance(gr.get("sat", 1.0))
-    w, h = img.size
-    gray = img.convert("L")
-    sk = gr.get("shadow_k", 0)
-    if sk > 0:
-        mask = gray.point(lambda v: int(((255 - v) / 255.0) ** 1.6 * 255 * sk))
-        img = Image.composite(Image.new("RGB", (w, h), gr.get("shadow", (0, 20, 40))), img, mask)
-    hk = gr.get("hl_k", 0)
-    if hk > 0:
-        mask = gray.point(lambda v: int((v / 255.0) ** 2.2 * 255 * hk))
-        img = Image.composite(Image.new("RGB", (w, h), gr.get("highlight", (255, 180, 120))), img, mask)
+def finish_art(img):
+    """Sentuhan akhir ringan pasca-AI: kontras & warna sedikit dipertegas,
+    plus grain film tipis. Tidak mengubah struktur gambar hasil AI."""
+    img = ImageEnhance.Contrast(img).enhance(1.05)
+    img = ImageEnhance.Color(img).enhance(1.08)
+    img = ImageEnhance.Sharpness(img).enhance(1.15)
     return img
 
 
-def bloom(img, amount):
-    if amount <= 0:
-        return img
-    gray = img.convert("L")
-    mask = gray.point(lambda v: 255 if v > 185 else 0).filter(ImageFilter.GaussianBlur(10))
-    glow = img.filter(ImageFilter.GaussianBlur(12))
-    glow = ImageEnhance.Brightness(glow).enhance(1.25)
-    return Image.composite(glow, img, mask.point(lambda v: int(v * min(1.0, amount))))
-
-
-def vignette(img, strength):
-    if strength <= 0:
-        return img
+def _scrim(img, y_from, y_to, max_alpha, reverse=False):
+    """Gradasi gelap dari y_from ke y_to (fraksi tinggi) untuk zona teks."""
     w, h = img.size
-    mask = Image.new("L", (w, h), 0)
-    d = ImageDraw.Draw(mask)
-    cx, cy = w / 2.0, h / 2.0
-    maxr = math.hypot(cx, cy)
-    steps = 48
-    for i in range(steps):                      # besar (gelap) -> kecil (terang)
-        r = maxr * (1 - i / steps)
-        v = int(255 * strength * (1 - i / steps) ** 1.8)
-        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=v)
-    mask = mask.filter(ImageFilter.GaussianBlur(max(2, w * 0.02)))
-    return Image.composite(Image.new("RGB", (w, h), (0, 0, 0)), img, mask)
-
-
-def grain(img, amount):
-    if amount <= 0:
-        return img
-    noise = Image.effect_noise(img.size, 28).convert("RGB")
-    noisy = ImageChops.overlay(img, noise)
-    return Image.blend(img, noisy, min(1.0, amount))
-
-
-def letterbox(img, bar=0.055):
-    w, h = img.size
-    d = ImageDraw.Draw(img)
-    bh = int(h * bar)
-    d.rectangle([0, 0, w, bh], fill=(0, 0, 0))
-    d.rectangle([0, h - bh, w, h], fill=(0, 0, 0))
-    return img
-
-
-def _vgrad_mask(size, y0, y1, strength, reverse=False):
-    """Mask L: gradasi vertikal (untuk zona teks gelap atas/bawah)."""
-    w, h = size
     m = Image.new("L", (w, h), 0)
     d = ImageDraw.Draw(m)
-    a, b = int(h * y0), int(h * y1)
-    smax = int(255 * strength)
-    for y in range(a, min(b, h)):
+    a, b = int(h * y_from), min(h, int(h * y_to))
+    for y in range(a, b):
         t = (y - a) / max(1, (b - a))
-        v = smax - int(smax * (t ** 1.4)) if reverse else int(smax * (t ** 1.4))
+        v = int(max_alpha * (1 - t) ** 1.3) if reverse else int(max_alpha * (t ** 1.3))
         d.line([(0, y), (w, y)], fill=v)
-    return m
-
-
-def _vgrad_strip(c1, c2, w, h):
-    """Gambar RGB gradasi vertikal c1 -> c2."""
-    col = Image.new("RGB", (1, h))
-    d = ImageDraw.Draw(col)
-    for y in range(h):
-        t = y / max(1, h - 1)
-        d.point((0, y), fill=tuple(int(a + (b - a) * t) for a, b in zip(c1, c2)))
-    return col.resize((w, h), RESAMPLE)
+    m = m.filter(ImageFilter.GaussianBlur(max(2, int(h * 0.008))))
+    return Image.composite(Image.new("RGB", (w, h), (0, 0, 0)), img, m)
 
 
 # ---------------------------------------------------------------------------
-# Util teks
+# Util teks — SEMUA menghormati max_width (margin aman kiri/kanan)
 # ---------------------------------------------------------------------------
 def text_w(font, text, tracking=0):
     return font.getlength(text) + tracking * max(0, len(text) - 1)
 
 
-def draw_tracked(d, cx, y, text, font, fill, tracking=0, stroke=0, stroke_fill=(0, 0, 0, 255),
-                 shadow=None):
-    """Tulis teks dengan letter-spacing, dipusatkan di cx. shadow=(dx,dy,color)."""
-    w = text_w(font, text, tracking)
-    x = cx - w / 2.0
-    if shadow:
-        sx, sy, scolor = shadow
-        xx = x
-        for ch in text:
-            d.text((xx + sx, y + sy), ch, font=font, fill=scolor)
-            xx += font.getlength(ch) + tracking
-    xx = x
-    for ch in text:
-        d.text((xx, y), ch, font=font, fill=fill,
-               stroke_width=stroke, stroke_fill=stroke_fill)
-        xx += font.getlength(ch) + tracking
-    return w
-
-
-def _split_two_lines(text, font, max_w):
-    words = text.split()
-    if len(words) < 2:
-        return None
-    best = None
-    for i in range(1, len(words)):
-        a, b = " ".join(words[:i]), " ".join(words[i:])
-        wa, wb = font.getlength(a), font.getlength(b)
-        if wa <= max_w and wb <= max_w:
-            diff = abs(wa - wb)
-            if best is None or diff < best[0]:
-                best = (diff, [a, b])
-    return best[1] if best else None
-
-
-def fit_title(text, role, max_w, max_h, start_size, min_size=16):
-    """Cari ukuran font terbesar agar judul muat (1-2 baris seimbang)."""
-    size = int(start_size)
-    while size >= min_size:
-        font = get_font(role, size)
-        if text_w(font, text) <= max_w:
-            return font, [text], size
-        lines = _split_two_lines(text, font, max_w)
-        if lines and len(lines) * size * 1.14 <= max_h:
-            return font, lines, size
-        size = int(size * 0.94)
-    return get_font(role, min_size), [text], min_size
-
-
-def _wrap_width(text, font, max_w):
+def _wrap_lines(text, font, max_w, max_lines):
+    """Pecah teks jadi baris-baris; setiap baris dijamin <= max_w.
+    Kata lebih panjang dari max_w (kasus ekstrem) dipotong dengan tanda -."""
     words = text.split()
     lines, cur = [], ""
     for wd in words:
@@ -280,201 +138,183 @@ def _wrap_width(text, font, max_w):
             cur = wd
     if cur:
         lines.append(cur)
-    return lines
+    if len(lines) > max_lines:                       # terlalu banyak baris
+        lines = lines[:max_lines]
+        lines[-1] = lines[-1].rstrip(" -") + "…"
+    # kata tunggal raksasa -> potong karakter per karakter agar tetap <= max_w
+    fixed = []
+    for ln in lines:
+        while font.getlength(ln) > max_w and len(ln) > 4:
+            ln = ln[:-2].rstrip(" -") + "…"
+        fixed.append(ln)
+    return fixed
 
 
-def _billing_text(title, cast, director):
-    seg = ["\u201c" + title.upper() + "\u201d"]
-    if cast:
-        names = ", ".join(c.strip().upper() for c in cast.split(",") if c.strip())[:120]
-        seg.append("DIBINTANGI " + names)
-    seg.append("MUSIK ORISINAL")
-    seg.append("SUTRADARA " + (director.strip().upper() if director and director.strip() else "KAMU"))
-    return "    ".join(seg)
+def fit_title(text, role, max_w, max_h, start_size, min_size=18, max_lines=3):
+    """Cari ukuran font terbesar agar JUDUL muat dalam max_w x max_h
+    dengan <= max_lines baris. Ini yang menjamin tulisan tidak melewati batas."""
+    size = int(start_size)
+    while size >= min_size:
+        font = get_font(role, size)
+        lines = _wrap_lines(text, font, max_w, max_lines)
+        lh = size * 1.12
+        if len(lines) * lh <= max_h and all(l for l in lines):
+            return font, lines, size, lh
+        size = int(size * 0.93)
+    font = get_font(role, min_size)
+    return font, _wrap_lines(text, font, max_w, max_lines), min_size, min_size * 1.12
+
+
+def draw_tracked(d, cx, y, text, font, fill, tracking=0, shadow=None):
+    """Teks ber-letter-spacing, dipusatkan di cx (dipakai hanya bila sudah
+    pasti muat; cek lebar sebelum memanggil)."""
+    w = text_w(font, text, tracking)
+    x = cx - w / 2.0
+    if shadow:
+        sx, sy, scolor = shadow
+        xx = x
+        for ch in text:
+            d.text((xx + sx, y + sy), ch, font=font, fill=scolor)
+            xx += font.getlength(ch) + tracking
+    xx = x
+    for ch in text:
+        d.text((xx, y), ch, font=font, fill=fill)
+        xx += font.getlength(ch) + tracking
+    return w
+
+
+def _tracked_fit(text, font, max_w, base_tracking):
+    """Kurangi letter-spacing sampai teks muat dalam max_w."""
+    tr = base_tracking
+    while tr > 0 and text_w(font, text, tr) > max_w:
+        tr = int(tr * 0.7)
+    if text_w(font, text, tr) <= max_w:
+        return tr
+    return 0
 
 
 # ---------------------------------------------------------------------------
-# Render utama
+# Komposisi akhir: key art AI + teks
 # ---------------------------------------------------------------------------
-def render_poster(photo, style, title, tagline="", cast="", director="",
-                  size=(1000, 1500), seed=7, minimal=False,
-                  studio="POSTER BIOSKOP PICTURES", release="SEGERA DI BIOSKOP"):
+def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
+                   sutradara="", studio="POSTER BIOSKOP PICTURES",
+                   release="SEGERA DI BIOSKOP", seed=7):
+    """Susun poster final: key art AI + tipografi dengan margin aman.
+    Return PIL RGB image berukuran `size`."""
     W, H = size
-    typo = style["typo"]
-    pal = style["palette"]
-    fx = style["fx"]
-    layout = style["layout"]
+    art = ImageOps.exif_transpose(art).convert("RGB")
+    art = cover_crop(art, W / H, focus=0.45).resize((W, H), RESAMPLE)
+    img = finish_art(art)
 
-    photo = ImageOps.exif_transpose(photo).convert("RGB")
-    photo = cover_crop(photo, W / H, focus=style.get("focus", 0.45)).resize((W, H), RESAMPLE)
-
-    img = color_grade(photo, style["grading"])
-    img = bloom(img, fx.get("bloom", 0))
-    img = vignette(img, fx.get("vignette", 0.3))
-    img = grain(img, fx.get("grain", 0.15))
-
-    lb = fx.get("letterbox", False) and abs(W / H - 16 / 9) < 0.02
-    if lb:
-        img = letterbox(img, 0.055)
-
-    # Zona gelap atas (untuk nama pemain) & bawah (untuk judul/kredit)
-    if not minimal and cast:
-        img = Image.composite(Image.new("RGB", (W, H), (0, 0, 0)), img,
-                              _vgrad_mask((W, H), 0.0, 0.16, 0.55, reverse=True))
-    img = Image.composite(Image.new("RGB", (W, H), (0, 0, 0)), img,
-                          _vgrad_mask((W, H), 0.50, 0.995, 0.92))
-
-    title_case = typo.get("case", "upper")
-    title_text = title.strip() if title and title.strip() else "TANPA JUDUL"
-    if title_case == "upper":
-        title_text = title_text.upper()
-
-    role = typo.get("font_role", "impact")
-    accent = pal["accent"]
+    landscape = W > H
+    img = _scrim(img, 0.42 if not landscape else 0.52, 1.0, 215)
+    if pemain:
+        img = _scrim(img, 0.0, 0.13, 150, reverse=True)
 
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
 
-    # --- posisi zona per layout ---
-    if layout == "center":
-        tag_y, cast_y = 0.09, 0.045
-        t_top, t_maxh = 0.34, 0.20
-        bill_y, rel_y, std_y = 0.885, 0.945, 0.978
-    elif layout == "split":
-        tag_y, cast_y = 0.085, 0.045
-        t_top, t_maxh = 0.64, 0.19
-        bill_y, rel_y, std_y = 0.868, 0.945, 0.978
-    else:  # "bottom" — one-sheet klasik
-        tag_y, cast_y = 0.575, 0.042
-        t_top, t_maxh = 0.625, 0.21
-        bill_y, rel_y, std_y = 0.855, 0.945, 0.978
+    # ====== MARGIN AMAN: semua teks dipaksa muat di dalam [margin, W-margin] ======
+    margin = max(int(W * 0.055), int(min(W, H) * 0.05), 24)
+    max_w = W - 2 * margin
+    cx = W / 2
 
-    if lb:   # letterbox menutup tepi -> tanpa strip bawah
-        rel_y = std_y = None
+    gold = (242, 193, 78, 255)
 
-    # --- nama pemain (billing atas) ---
-    if not minimal and cast:
-        f_cast = get_font("condensed", max(10, int(H * 0.021)))
-        names = "   ·   ".join(c.strip().upper() for c in cast.split(",") if c.strip())[:90]
-        draw_tracked(d, W / 2, int(H * cast_y), names, f_cast, (245, 245, 245, 225),
-                     tracking=max(2, int(H * 0.004)),
-                     shadow=(1, 1, (0, 0, 0, 160)))
+    # --- nama pemain (opsional, zona atas) ---
+    if pemain:
+        f_cast = get_font("credit", max(12, int(H * 0.020)))
+        names = "   ·   ".join(p.strip().upper() for p in pemain.split(",") if p.strip())
+        tr = _tracked_fit(names, f_cast, max_w, max(2, int(H * 0.004)))
+        if text_w(f_cast, names, tr) <= max_w:
+            draw_tracked(d, cx, int(H * 0.045), names, f_cast, (245, 245, 245, 230),
+                         tracking=tr, shadow=(1, 1, (0, 0, 0, 170)))
 
-    # --- tagline ---
-    if not minimal and tagline:
-        f_tag = get_font("serif", max(11, int(H * 0.024)))
-        draw_tracked(d, W / 2, int(H * tag_y), "\u201c" + tagline + "\u201d", f_tag,
-                     (*accent, 235), tracking=max(1, int(H * 0.002)),
-                     shadow=(1, 1, (0, 0, 0, 160)))
-
-    # --- judul: auto-fit ---
-    max_tw = W * 0.86
-    start = int(H * 0.128) if role in ("impact", "block") else int(H * 0.11)
-    f_title, lines, tsize = fit_title(title_text, role, max_tw, H * t_maxh, start)
-    track = max(1, int(tsize * 0.02)) if role == "serif" else 0
-    lh = tsize * 1.14
-    t_end = H * t_top + lh * len(lines)
+    # --- judul: auto-fit, 1-3 baris, dijamin <= max_w ---
+    title_text = (title or "").strip().upper() or "TANPA JUDUL"
+    start = int(H * (0.155 if landscape else 0.135))
+    max_h_title = H * (0.30 if landscape else 0.27)
+    f_title, lines, tsize, lh = fit_title(title_text, "display", max_w, max_h_title,
+                                          start, max_lines=3)
+    bottom_anchor = H * (0.90 if not sutradara and not release else 0.885)
+    y_top = bottom_anchor - lh * len(lines)
 
     # bayangan lembut judul
-    if not lb or t_end < H * 0.9:
-        sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        ds = ImageDraw.Draw(sh)
-        yy = H * t_top
-        for ln in lines:
-            ds.text((W / 2 - text_w(f_title, ln, track) / 2 + max(2, tsize * 0.045),
-                     yy + max(3, tsize * 0.05)), ln, font=f_title,
-                    fill=(0, 0, 0, 200), stroke_width=max(1, tsize // 30),
-                    stroke_fill=(0, 0, 0, 200))
-            yy += lh
-        sh = sh.filter(ImageFilter.GaussianBlur(max(2, tsize * 0.02)))
-        img = Image.alpha_composite(img.convert("RGBA"), sh).convert("RGB")
+    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ds = ImageDraw.Draw(sh)
+    yy = y_top
+    for ln in lines:
+        ds.text((cx - text_w(f_title, ln) / 2 + max(2, tsize * 0.05),
+                 yy + max(3, tsize * 0.06)), ln, font=f_title, fill=(0, 0, 0, 220))
+        yy += lh
+    sh = sh.filter(ImageFilter.GaussianBlur(max(2, int(tsize * 0.03))))
+    img = Image.alpha_composite(img.convert("RGBA"), sh).convert("RGB")
 
     # judul itu sendiri
-    fill_mode = typo.get("title_fill", "white")
-    if fill_mode == "gradient":
-        y_top = max(0, int(H * t_top))
-        y_bot = min(H, int(t_end) + tsize // 3 + 2)
-        gh = max(1, y_bot - y_top)
-        tmask = Image.new("L", (W, H), 0)
-        dm = ImageDraw.Draw(tmask)
-        yy = H * t_top
-        for ln in lines:
-            dm.text((W / 2 - text_w(f_title, ln, track) / 2, yy), ln, font=f_title,
-                    fill=255, stroke_width=max(1, tsize // 30), stroke_fill=255)
-            yy += lh
-        g1, g2 = pal["title_grad"]
-        img.paste(_vgrad_strip(g1, g2, W, gh), (0, y_top),
-                  tmask.crop((0, y_top, W, y_bot)))
-    else:
-        fill = (246, 246, 246, 255) if fill_mode == "white" else (*accent, 255)
-        yy = H * t_top
-        for ln in lines:
-            d.text((W / 2 - text_w(f_title, ln, track) / 2, yy), ln, font=f_title,
-                   fill=fill, stroke_width=max(1, tsize // 30), stroke_fill=(0, 0, 0, 255))
-            yy += lh
+    yy = y_top
+    for ln in lines:
+        d.text((cx - text_w(f_title, ln) / 2, yy), ln, font=f_title,
+               fill=(247, 246, 244, 255))
+        yy += lh
+    t_end = yy
 
-    # garis aksen di bawah judul
-    if not minimal:
-        ry = int(min(t_end + H * 0.014, bill_y * H - H * 0.02))
-        d.rectangle([W / 2 - W * 0.11, ry, W / 2 + W * 0.11, ry + max(2, H * 0.003)],
-                    fill=(*accent, 230))
+    # garis aksen emas di bawah judul (selalu di dalam margin)
+    ry = int(min(t_end + H * 0.012, H * 0.915))
+    d.rectangle([cx - max_w * 0.16, ry, cx + max_w * 0.16, ry + max(2, int(H * 0.003))],
+                fill=gold)
 
-    # --- billing block + strip rilis ---
-    if not minimal:
-        f_bill = get_font("condensed", max(9, int(H * 0.0155)))
-        btxt = _billing_text(title_text, cast, director)
-        for i, ln in enumerate(_wrap_width(btxt, f_bill, W * 0.9)[:2]):
-            d.text((W / 2 - f_bill.getlength(ln) / 2, H * bill_y + i * H * 0.021), ln,
-                   font=f_bill, fill=(225, 225, 225, 215))
-        if rel_y:
-            f_rel = get_font("condensed", max(11, int(H * 0.022)))
-            draw_tracked(d, W / 2, int(H * rel_y), release, f_rel, (250, 250, 250, 245),
-                         tracking=max(3, int(H * 0.007)), shadow=(1, 1, (0, 0, 0, 170)))
-            bw = max(text_w(f_rel, release, max(3, int(H * 0.007))), W * 0.2)
-            d.rectangle([W / 2 - bw / 2, H * rel_y + H * 0.026,
-                         W / 2 + bw / 2, H * rel_y + H * 0.026 + max(2, H * 0.0025)],
-                        fill=(*accent, 200))
-        if std_y:
-            f_std = get_font("condensed", max(8, int(H * 0.012)))
-            draw_tracked(d, W / 2, int(H * std_y), studio, f_std, (210, 210, 210, 140),
-                         tracking=max(2, int(H * 0.004)))
+    # --- tagline (opsional, di atas judul) ---
+    if tagline and tagline.strip():
+        f_tag = get_font("serif", max(12, int(H * 0.024)))
+        t = "“" + tagline.strip().upper() + "”"
+        tr = _tracked_fit(t, f_tag, max_w, max(1, int(H * 0.002)))
+        ty = max(int(H * 0.62), int(y_top - H * 0.055))
+        if text_w(f_tag, t, tr) <= max_w:
+            draw_tracked(d, cx, ty, t, f_tag, (*gold[:3], 235),
+                         tracking=tr, shadow=(1, 1, (0, 0, 0, 170)))
+
+    # --- billing block (opsional): pemain & sutradara, kecil di bawah judul ---
+    if pemain or sutradara:
+        f_bill = get_font("credit", max(10, int(H * 0.016)))
+        segs = []
+        if pemain:
+            segs.append("DIBINTANGI " + ", ".join(
+                p.strip().upper() for p in pemain.split(",") if p.strip()))
+        if sutradara and sutradara.strip():
+            segs.append("SUTRADARA " + sutradara.strip().upper())
+        btxt = "   ".join(segs)
+        by = ry + max(6, int(H * 0.018))
+        for ln in _wrap_lines(btxt, f_bill, max_w, 2):
+            d.text((cx - f_bill.getlength(ln) / 2, by), ln,
+                   font=f_bill, fill=(228, 228, 228, 210))
+            by += H * 0.020
+            ry = by                                  # geser strip rilis ke bawah
+    # --- strip rilis + studio ---
+    y_strip = min(H * 0.955, H - int(H * 0.033))
+    if release and release.strip():
+        f_rel = get_font("credit", max(12, int(H * 0.022)))
+        tr = _tracked_fit(release.strip().upper(), f_rel, max_w, max(3, int(H * 0.007)))
+        rw = text_w(f_rel, release.strip().upper(), tr)
+        draw_tracked(d, cx, int(y_strip), release.strip().upper(), f_rel,
+                     (250, 250, 250, 245), tracking=tr, shadow=(1, 1, (0, 0, 0, 170)))
+        d.rectangle([cx - rw / 2, y_strip + H * 0.026, cx + rw / 2,
+                     y_strip + H * 0.026 + max(2, int(H * 0.0025))], fill=gold)
+    if studio and studio.strip():
+        f_std = get_font("credit", max(9, int(H * 0.012)))
+        s = studio.strip().upper()
+        tr = _tracked_fit(s, f_std, max_w, max(2, int(H * 0.004)))
+        draw_tracked(d, cx, int(H * 0.985) - f_std.size, s, f_std,
+                     (215, 215, 215, 150), tracking=tr)
 
     img = Image.alpha_composite(img.convert("RGBA"), layer).convert("RGB")
     return img
 
 
-# ---------------------------------------------------------------------------
-# Adegan placeholder (untuk thumbnail galeri referensi)
-# ---------------------------------------------------------------------------
-def placeholder_scene(w, h, palette, seed=3):
-    rng = random.Random(seed)
-    dark = tuple(int(c * 0.35) for c in palette["highlight"])
-    sky_top = tuple(int(c * 0.5) for c in palette["shadow"])
-    base = _vgrad_strip(sky_top, dark, w, h)
-    d = ImageDraw.Draw(base)
-    # bulan / matahari
-    r = int(min(w, h) * 0.11)
-    mx, my = int(w * rng.uniform(0.3, 0.7)), int(h * rng.uniform(0.16, 0.3))
-    d.ellipse([mx - r, my - r, mx + r, my + r], fill=palette["accent"])
-    glow = base.filter(ImageFilter.GaussianBlur(w * 0.06))
-    base = Image.blend(base, glow, 0.35)
-    d = ImageDraw.Draw(base)
-    # bintang
-    for _ in range(int(w * h / 900)):
-        x, y = rng.randrange(w), rng.randrange(int(h * 0.55))
-        v = rng.randint(120, 220)
-        d.point((x, y), fill=(v, v, min(255, v + 20)))
-    # pegunungan 2 lapis
-    for layer_i, dim in enumerate((0.55, 0.3)):
-        col = tuple(int(c * dim) for c in palette["shadow"])
-        pts = [(0, h)]
-        y0 = h * (0.62 + 0.12 * layer_i)
-        x = 0
-        while x < w:
-            step = max(4, w // 10)
-            x2 = min(w, x + rng.randint(step, step * 2))
-            pts.append((x2, y0 + rng.randint(-int(h * 0.09), int(h * 0.02))))
-            x = x2
-        pts.append((w, h))
-        d.polygon(pts, fill=col)
-    return base
+def preview_size(rasio_full, max_h=760, max_w=920):
+    """Ukuran preview yang pas di jendela (menjaga rasio)."""
+    w, h = rasio_full
+    r = w / h
+    pw, ph = int(max_h * r), max_h
+    if pw > max_w:
+        pw, ph = max_w, int(max_w / r)
+    return (max(2, pw // 2 * 2), max(2, ph // 2 * 2))

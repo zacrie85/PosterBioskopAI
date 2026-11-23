@@ -1,8 +1,10 @@
-name: Build EXE Windows
+name: Build EXE + Model AI
 
-# Membangun PosterBioskopAI.exe dengan PyInstaller di runner Windows asli.
-# - Bisa dijalankan manual: tab Actions -> Build EXE Windows -> Run workflow
-# - Otomatis saat push tag v* (EXE langsung ditempel ke release tsb)
+# PosterBioskopAI v2.0 — AI generatif lokal (Stable Diffusion Turbo ONNX)
+# - Bisa dijalankan manual: tab Actions -> Build EXE + Model AI -> Run workflow
+# - Otomatis saat push tag v* (EXE + bagian model AI ditempel ke release tsb)
+# - smoke-test menjalankan pipeline AI dengan MODEL ASLI di runner Linux dan
+#   menyimpan contoh poster sebagai artifact (bukti AI benar-benar bekerja)
 
 on:
   workflow_dispatch: {}
@@ -12,8 +14,11 @@ on:
 permissions:
   contents: write
 
+env:
+  MODEL_BASE: https://huggingface.co/jdp8/sd-turbo-onnx/resolve/main
+
 jobs:
-  build:
+  build-exe:
     runs-on: windows-latest
     steps:
       - name: Ambil kode
@@ -29,10 +34,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Build EXE (PyInstaller)
+      - name: Build EXE (PyInstaller, font ikut dikemas)
         run: |
           python make_icon.py
-          pyinstaller --noconfirm --onefile --windowed --name PosterBioskopAI --icon=icon.ico poster_app.py
+          pyinstaller --noconfirm --onefile --windowed --name PosterBioskopAI --icon=icon.ico --add-data "assets;assets" poster_app.py
 
       - name: Simpan EXE sebagai artifact
         uses: actions/upload-artifact@v4
@@ -46,4 +51,110 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
-        run: gh release upload $env:GITHUB_REF_NAME dist/PosterBioskopAI.exe --clobber --repo $env:GITHUB_REPOSITORY
+        run: |
+          gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --title "PosterBioskopAI $env:GITHUB_REF_NAME" --notes "Poster AI generatif lokal (Stable Diffusion Turbo)."
+          }
+          gh release upload $env:GITHUB_REF_NAME dist/PosterBioskopAI.exe --clobber --repo $env:GITHUB_REPOSITORY
+
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+
+      - name: Siapkan Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependensi
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pillow opencv-python-headless numpy regex onnxruntime
+
+      - name: Unduh model AI (SD-Turbo ONNX fp16, ~2,7 GB)
+        run: |
+          mkdir -p models/sd-turbo-onnx/tokenizer models/sd-turbo-onnx/text_encoder models/sd-turbo-onnx/unet models/sd-turbo-onnx/vae_decoder models/sd-turbo-onnx/vae_encoder
+          B=$MODEL_BASE
+          curl -sL --fail -o models/sd-turbo-onnx/text_encoder/model.onnx $B/text_encoder/model.onnx &
+          curl -sL --fail -o models/sd-turbo-onnx/unet/model.onnx        $B/unet/model.onnx &
+          curl -sL --fail -o models/sd-turbo-onnx/vae_decoder/model.onnx $B/vae_decoder/model.onnx &
+          curl -sL --fail -o models/sd-turbo-onnx/vae_encoder/model.onnx $B/vae_encoder/model.onnx &
+          curl -sL --fail -o models/sd-turbo-onnx/tokenizer/vocab.json   $B/tokenizer/vocab.json &
+          curl -sL --fail -o models/sd-turbo-onnx/tokenizer/merges.txt   $B/tokenizer/merges.txt &
+          wait
+          du -sh models/sd-turbo-onnx
+
+      - name: Buat video uji sintetis
+        run: |
+          python - <<'PY'
+          import cv2, numpy as np, os
+          os.makedirs("video_uji", exist_ok=True)
+          W, H = 960, 540
+          vw = cv2.VideoWriter("video_uji/VID_20250101_bukit_cahaya_senja.mp4",
+                               cv2.VideoWriter_fourcc(*"mp4v"), 25, (W, H))
+          for i in range(150):
+            t = i / 150
+            f = np.zeros((H, W, 3), np.uint8)
+            f[:, :, 0] = int(90 + 80 * t)
+            f[:, :, 1] = int(60 + 90 * t)
+            f[:, :, 2] = int(30 + 120 * t)
+            cv2.circle(f, (int(W * (0.2 + 0.6 * t)), int(H * 0.45)), 70, (40, 60, 200), -1)
+            cv2.rectangle(f, (int(W * 0.6), int(H * 0.7)), (int(W * 0.85), int(H * 0.9)), (10, 10, 40), -1)
+            vw.write(f)
+          vw.release()
+          print("video uji siap")
+          PY
+
+      - name: Jalankan pipeline AI (batch, rasio 9:16)
+        run: python batch_poster.py video_uji --out hasil_ai --rasio "9:16" --kualitas "Cepat (1 langkah)"
+
+      - name: Simpan contoh poster AI sebagai artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: contoh-poster-AI-asli
+          path: |
+            hasil_ai/*.png
+            video_uji/VID_20250101_bukit_cahaya_senja.mp4
+          if-no-files-found: error
+
+  build-model:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Unduh model AI (~2,7 GB dari HuggingFace)
+        run: |
+          mkdir -p models/sd-turbo-onnx/tokenizer models/sd-turbo-onnx/text_encoder models/sd-turbo-onnx/unet models/sd-turbo-onnx/vae_decoder models/sd-turbo-onnx/vae_encoder
+          B=$MODEL_BASE
+          curl -sL --fail -o models/sd-turbo-onnx/text_encoder/model.onnx $B/text_encoder/model.onnx &
+          curl -sL --fail -o models/sd-turbo-onnx/unet/model.onnx        $B/unet/model.onnx &
+          curl -sL --fail -o models/sd-turbo-onnx/vae_decoder/model.onnx $B/vae_decoder/model.onnx &
+          curl -sL --fail -o models/sd-turbo-onnx/vae_encoder/model.onnx $B/vae_encoder/model.onnx &
+          curl -sL --fail -o models/sd-turbo-onnx/tokenizer/vocab.json   $B/tokenizer/vocab.json &
+          curl -sL --fail -o models/sd-turbo-onnx/tokenizer/merges.txt   $B/tokenizer/merges.txt &
+          wait
+          du -sh models/sd-turbo-onnx
+
+      - name: Kemas zip & pecah jadi bagian <2 GB (batas GitHub release)
+        run: |
+          zip -qr PosterBioskopAI-Model-AI.zip models
+          split -b 1900m -d PosterBioskopAI-Model-AI.zip PosterBioskopAI-Model-AI.zip.part
+          ls -la PosterBioskopAI-Model-AI.zip.part*
+
+      - name: Simpan bagian model sebagai artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Model-AI-parts
+          path: PosterBioskopAI-Model-AI.zip.part*
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Tempel bagian model ke release (saat push tag v*)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "PosterBioskopAI $GITHUB_REF_NAME" --notes "Poster AI generatif lokal (Stable Diffusion Turbo)."
+          gh release upload "$GITHUB_REF_NAME" PosterBioskopAI-Model-AI.zip.part* GABUNG-MODEL.bat --clobber --repo "$GITHUB_REPOSITORY"

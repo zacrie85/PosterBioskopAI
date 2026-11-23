@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-PosterBioskopAI — MODE BATCH: satu folder video/foto → banyak poster sekaligus.
+PosterBioskopAI — MODE BATCH AI: satu folder video/foto → banyak poster AI.
 
 Tiap file dianalisis sendiri-sendiri: frame terbaik diekstraksi, judul diambil
-dari nama file, dan gaya poster di-auto-match dari 999 referensi (atau dipakai
-satu gaya yang sama untuk semua). Hasil disimpan sebagai PNG resolusi tinggi.
+dari nama file, lalu MESIN AI (Stable Diffusion Turbo lokal) mengubah frame
+menjadi key art poster sesuai SATU PROMPT yang sama untuk semua file
+(persis tombol "Terapkan ke Semua Video" di GUI). Hasil disimpan sebagai PNG
+resolusi tinggi.
 
 Dipakai dua cara:
-  1. Dari GUI     : tombol "MODE BATCH" di aplikasi (poster_app.py).
+  1. Dari GUI     : tombol MODE BATCH di aplikasi (poster_app.py).
   2. Dari terminal: python batch_poster.py <folder> [--out DIR]
-                    [--rasio "Wallpaper 16:9"] [--gaya REF-289]
+                    [--rasio "9:16"] [--prompt "teks prompt"]
+                    [--kualitas "Normal (2 langkah)"]
 """
 
 import argparse
@@ -20,9 +23,9 @@ import time
 
 from PIL import Image
 
+import poster_ai as ai
 import poster_engine as eng
 import frame_picker as fp
-import style_library as lib
 
 IMG_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
@@ -50,33 +53,38 @@ def _unique_name(judul, used):
     return name
 
 
-def process_one(path, out_dir, ratio_key, fixed_style=None, used=None):
-    """Render satu file menjadi poster. Return dict ringkasan (ok/gagal + detail)."""
+def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None):
+    """Proses satu file: frame -> AI -> poster tipografi. Return dict ringkasan."""
     t0 = time.time()
     is_vid = fp.is_video(path)
     info_detik = None
     if is_vid:
-        img, stats, info = fp.extract_best_frame(path)
+        img, _, info = fp.extract_best_frame(path)
         info_detik = info.get("waktu_detik")
     else:
         img = Image.open(path)
-        stats = lib.analyze_image(img)
     judul = fp.title_from_filename(path)
 
-    if fixed_style is not None:
-        style = fixed_style
-    else:
-        style = lib.match_styles(stats, top_n=1)[0][1]
+    video_ratio = img.size[0] / max(1, img.size[1])
+    canvas = ai.ai_canvas(ratio_key, video_ratio)
+    full = ai.poster_full_size(ratio_key, video_ratio)
 
-    poster = eng.render_poster(img, style, judul,
-                               size=eng.FULL_SIZES.get(ratio_key, (1000, 1500)))
+    def prog(fase, info):
+        if log:
+            log("      " + info)
+
+    engine = getattr(process_one, "_engine", None)
+    if engine is None:
+        engine = ai.PosterAI(keep_loaded=True)
+        process_one._engine = engine                  # sesi model dipakai ulang
+    art = engine.generate(img, prompt, canvas, quality_key=kualitas, progress=prog)
+    poster = eng.compose_poster(art, judul, size=full)
     out_path = os.path.join(out_dir, _unique_name(judul, used) + ".png")
     poster.save(out_path, quality=92)
     return {
         "ok": True,
         "sumber": path,
         "judul": judul,
-        "gaya": f"{style['id']} · {style['name']}",
         "keluar": out_path,
         "detik": info_detik,
         "ukuran": poster.size,
@@ -85,9 +93,10 @@ def process_one(path, out_dir, ratio_key, fixed_style=None, used=None):
     }
 
 
-def run_batch(folder, out_dir=None, ratio_key="Poster 2:3", style_id=None,
-              log=None, progress=None, should_continue=None):
-    """Proses SEMUA video/foto di folder.
+def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
+              kualitas="Normal (2 langkah)", log=None, progress=None,
+              should_continue=None):
+    """Proses SEMUA video/foto di folder dengan SATU prompt AI yang sama.
 
     log(msg)               -> pesan kemajuan (mis. untuk Text di GUI / print)
     progress(selesai, total, nama_file)
@@ -98,29 +107,29 @@ def run_batch(folder, out_dir=None, ratio_key="Poster 2:3", style_id=None,
     progress = progress or (lambda *a: None)
     cont = should_continue or (lambda: True)
 
+    ok_model, got, total_bytes, _ = ai.model_status()
+    if not ok_model:
+        raise ValueError("Model AI belum terunduh lengkap (%d%%). "
+                         "Buka aplikasi → tombol 🤖 Status Model AI → Unduh."
+                         % (got * 100 // max(1, total_bytes)))
+
     files = collect_media(folder)
     if not files:
         raise ValueError("Tidak ada video/foto di folder itu. "
                          "Format yang dikenal: " + " ".join(fp.VIDEO_EXTS + IMG_EXTS))
 
-    if out_dir is None:                       # folder hasil = folder sebelah, mis. /video → /video_poster
+    if out_dir is None:                       # folder hasil = folder sebelah
         folder = os.path.abspath(folder)
         out_dir = folder.rstrip(os.sep) + "_poster"
     os.makedirs(out_dir, exist_ok=True)
 
-    fixed = None
-    if style_id:                              # "REF-289" -> satu gaya untuk semua
-        sid = style_id.strip().upper()
-        fixed = next((s for s in lib.library() if s["id"].upper() == sid), None)
-        if fixed is None:
-            raise ValueError(f"Gaya {style_id} tidak ada di perpustakaan "
-                             f"(999 referensi, contoh: REF-302).")
-
-    lib.library()                             # pastikan perpustakaan sudah dibangun
+    prompt = (prompt or "").strip() or ai.DEFAULT_PROMPT
     used, hasil, errors = set(), [], []
     n = len(files)
-    log(f"Batch dimulai: {n} file → folder hasil: {out_dir}")
-    log(f"Rasio: {ratio_key} · Gaya: {'pilih per video (auto-match)' if fixed is None else fixed['id']}")
+    prompt_pendek = (prompt[:60] + "…") if len(prompt) > 60 else prompt
+    log(f"Batch AI dimulai: {n} file → folder hasil: {out_dir}")
+    log(f"Rasio: {ratio_key} · Kualitas: {kualitas}")
+    log(f"Prompt untuk SEMUA file: {prompt_pendek}")
     done = 0
     for i, path in enumerate(files):
         name = os.path.basename(path)
@@ -132,16 +141,21 @@ def run_batch(folder, out_dir=None, ratio_key="Poster 2:3", style_id=None,
         progress(done, n, name)
         log(f"[{i + 1}/{n}] {name} …")
         try:
-            r = process_one(path, out_dir, ratio_key, fixed_style=fixed, used=used)
+            r = process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=log)
             hasil.append(r)
             done += 1
             sumber = f"detik {r['detik']} dari video" if r["video"] else "foto"
-            log(f"    ✔ {r['judul']} — gaya {r['gaya']} ({sumber}, {r['durasi_proses']} dtk)")
-        except Exception as exc:              # noqa: BLE001 — satu file gagal, lanjut yang lain
+            log(f"    ✔ {r['judul']} — poster AI {r['ukuran'][0]}×{r['ukuran'][1]} px "
+                f"({sumber}, {r['durasi_proses']} dtk)")
+        except Exception as exc:              # noqa: BLE001 — satu gagal, lanjut lain
             errors.append({"sumber": path, "error": str(exc)})
             log(f"    ✘ GAGAL: {exc}")
+    try:
+        process_one._engine.free_all()        # lepas memori model
+    except AttributeError:
+        pass
     progress(done, n, "")
-    log(f"SELESAI: {len(hasil)} poster berhasil, {len(errors)} gagal → {out_dir}")
+    log(f"SELESAI: {len(hasil)} poster AI berhasil, {len(errors)} gagal → {out_dir}")
     return {"total": n, "ok": len(hasil), "gagal": len(errors), "dibatalkan": False,
             "out_dir": out_dir, "hasil": hasil, "errors": errors}
 
@@ -161,18 +175,21 @@ def open_folder(path):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="PosterBioskopAI MODE BATCH: satu folder video/foto → banyak poster")
+        description="PosterBioskopAI MODE BATCH AI: folder video/foto → poster AI semua")
     ap.add_argument("folder", help="folder berisi video/foto")
     ap.add_argument("--out", default=None, help="folder hasil (bawaan: <folder>_poster)")
-    ap.add_argument("--rasio", default="Poster 2:3", choices=list(eng.RATIOS.keys()))
-    ap.add_argument("--gaya", default=None,
-                    help="pakai SATU gaya untuk semua, mis. REF-289 (bawaan: auto-match per video)")
+    ap.add_argument("--rasio", default="Ikuti rasio video",
+                    choices=["Ikuti rasio video", "9:16", "16:9"])
+    ap.add_argument("--prompt", default=None,
+                    help="prompt AI untuk SEMUA file (bawaan: prompt sinematik Hollywood)")
+    ap.add_argument("--kualitas", default="Normal (2 langkah)",
+                    choices=list(ai.QUALITY_PRESETS.keys()))
     a = ap.parse_args()
 
-    res = run_batch(a.folder, a.out, a.rasio, a.gaya, log=print)
+    res = run_batch(a.folder, a.out, a.rasio, a.prompt, a.kualitas, log=print)
     for e in res["errors"]:
         print(f"  gagal: {e['sumber']} — {e['error']}")
-    print(f"\nPoster tersimpan di: {res['out_dir']}")
+    print(f"\nPoster AI tersimpan di: {res['out_dir']}")
     sys.exit(0 if (res["ok"] > 0 and res["gagal"] == 0) else 1)
 
 
