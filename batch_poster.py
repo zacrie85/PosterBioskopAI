@@ -26,6 +26,7 @@ from PIL import Image
 import poster_ai as ai
 import poster_engine as eng
 import frame_picker as fp
+import template_engine as te
 
 IMG_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
@@ -108,6 +109,13 @@ def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
     progress = progress or (lambda *a: None)
     cont = should_continue or (lambda: True)
 
+    # template: "Tanpa" -> None; nama di folder templates/ atau path file
+    template_path = te.cari_template(template)
+    if (template and str(template).strip().lower()
+            not in ("tanpa", "tanpa template", "none") and template_path is None):
+        raise ValueError("Template tidak ditemukan: %r — cek nama di folder "
+                         "templates\\ (tanpa .png) atau pakai path file." % template)
+
     ok_model, got, total_bytes, _ = ai.model_status()
     if not ok_model:
         raise ValueError("Model AI belum terunduh lengkap (%d%%). "
@@ -130,6 +138,8 @@ def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
     prompt_pendek = (prompt[:60] + "…") if len(prompt) > 60 else prompt
     log(f"Batch AI dimulai: {n} file → folder hasil: {out_dir}")
     log(f"Rasio: {ratio_key} · Kualitas: {kualitas}")
+    if template_path:
+        log(f"Template: {os.path.basename(template_path)}")
     log(f"Prompt untuk SEMUA file: {prompt_pendek}")
     done = 0
     for i, path in enumerate(files):
@@ -143,7 +153,7 @@ def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
         log(f"[{i + 1}/{n}] {name} …")
         try:
             r = process_one(path, out_dir, ratio_key, prompt, kualitas, used,
-                            log=log, template=template)
+                            log=log, template=template_path)
             hasil.append(r)
             done += 1
             sumber = f"detik {r['detik']} dari video" if r["video"] else "foto"
