@@ -483,23 +483,26 @@ class PosterAI:
 
     def _run(self, name, feeds):
         """Jalankan sesi ONNX. Feeds dicocokkan berdasarkan nama; kalau nama
-        tidak persis sama (tergantung konversi model), pakai urutan input."""
+        tidak persis sama (tergantung konversi model), pakai urutan input.
+        Setiap feed dikonversi ke tipe yang diDEKLARASIKAN sesi; bila kernel
+        ORT di CPU tertentu tetap menuntut tipe lain (pilihan kernel bergantung
+        fitur CPU — kasus nyata: timestep int64 ditolak, minta float), pesan
+        galat ORT diparse, feed dikonversi, dan dicoba ulang sekali."""
         s = self._session(name)
         ins = list(s.get_inputs())
         by_name = {i.name: i for i in ins}
         want_np = {
             "tensor(float)": np.float32, "tensor(float16)": np.float16,
+            "tensor(double)": np.float64,
             "tensor(int64)": np.int64, "tensor(int32)": np.int32,
+            "tensor(int16)": np.int16, "tensor(int8)": np.int8,
+            "tensor(bool)": np.bool_,
         }
 
         def cast(v, want):
-            t = v.dtype
-            if want == "tensor(float16)" and t != np.float16:
-                return v.astype(np.float16)
-            if want == "tensor(float)" and t == np.float16:
-                return v.astype(np.float32)
-            if want.startswith("tensor(int") and not np.issubdtype(t, np.integer):
-                return v.astype(np.int64 if want.endswith("64") else np.int32)
+            t = want_np.get(want)
+            if t is not None and v.dtype != t:
+                return v.astype(t)
             return v
 
         feed, used = {}, set()
@@ -511,7 +514,32 @@ class PosterAI:
             for i, (k, v) in enumerate(feeds.items()):
                 if i < len(ins):
                     feed[ins[i].name] = cast(v, ins[i].type)
-        outs = s.run(None, feed)
+        try:
+            outs = s.run(None, feed)
+        except Exception as exc:              # noqa: BLE001
+            naik = RuntimeError(
+                "Sesi %s menolak feed (%s). Detail: %s"
+                % (name, ", ".join("%s:%s" % (k, v.dtype) for k, v in feed.items()),
+                   exc))
+            m = re.search(
+                r"Actual: \(tensor\((\w+)\)\)\s*,\s*expected: \(tensor\((\w+)\)\)",
+                str(exc))
+            if not m:
+                raise naik from exc
+            np_asal = want_np.get("tensor(%s)" % m.group(1))
+            np_tujuh = want_np.get("tensor(%s)" % m.group(2))
+            if np_asal is None or np_tujuh is None:
+                raise naik from exc
+            for k, v in list(feed.items()):
+                if v.dtype == np_asal:
+                    feed[k] = v.astype(np_tujuh)
+                    break
+            else:
+                raise naik from exc
+            try:
+                outs = s.run(None, feed)
+            except Exception as exc2:         # noqa: BLE001
+                raise naik from exc2
         return {o.name: v for o, v in zip(s.get_outputs(), outs)}
 
     def _encode_text(self, prompt):

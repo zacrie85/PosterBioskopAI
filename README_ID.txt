@@ -3,6 +3,16 @@
 Aplikasi desktop Windows pembuat poster film ala Hollywood dari video/foto
 kamu — kini dengan **mesin AI generatif sungguhan yang berjalan 100% offline**.
 
+## Yang baru di v2.0.4 (perbaikan InvalidArgument saat AI menggambar)
+
+* Setiap feed model AI kini dikonversi otomatis ke tipe yang diDEKLARASIKAN
+  sesi ONNX (float/fp16/int64/int32) — menutup selisih deklarasi model.
+* Bila kernel onnxruntime di CPU tertentu tetap menuntut tipe lain (kasus
+  nyata: timestep int64 ditolak, minta float), pesan galat diparse otomatis
+  dan percobaan kedua dijalankan dengan tipe yang diminta.
+* Sesi yang tetap gagal melaporkan nama sesi + tipe semua feed ke log.
+* CI kini mencatat deklarasi input tiap sesi ONNX sebagai referensi.
+
 ## Yang baru di v2.0.3 (perbaikan tampilan pesan galat)
 
 * Memperbaiki NameError saat menampilkan jendela pesan galat (bug closure:

@@ -2,6 +2,10 @@
 """
 PosterBioskopAI — aplikasi desktop OFFLINE pembuat poster film ala Hollywood.
 
+Versi 2.0.4 — perbaikan InvalidArgument saat AI menggambar: feed dikonversi
+  otomatis ke tipe yang dideklarasikan sesi ONNX, dan bila kernel ORT di CPU
+  tertentu tetap menuntut tipe lain, pesan galat diparse lalu dicoba ulang
+  dengan tipe yang diminta (kasus nyata: timestep int64 vs float).
 Versi 2.0.3 — perbaikan bug tampilan pesan galat (NameError): variabel target
   `except ... as exc` dihapus Python saat blok berakhir; lambda yang merujuknya
   lewat after() kini memakai salinan teks galat, dan galat ASLI selalu terekam

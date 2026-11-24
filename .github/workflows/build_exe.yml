@@ -112,6 +112,16 @@ jobs:
           assert siap, "unduhan model tidak lengkap"
           PY
 
+      - name: Probe deklarasi input sesi ONNX (referensi dtype permanen)
+        run: |
+          python - <<'PY'
+          import poster_ai
+          ai = poster_ai.PosterAI(keep_loaded=True)
+          for name in ("text_encoder", "vae_encoder", "unet", "vae_decoder"):
+              s = ai._session(name)
+              print(name, "->", [(i.name, i.type) for i in s.get_inputs()])
+          PY
+
       - name: Buat video uji sintetis
         run: |
           python - <<'PY'
@@ -223,7 +233,7 @@ jobs:
           test -n "$rel_id"
           echo "Release ID: $rel_id"
 
-          body="PosterBioskopAI v2.0.3 — pembuat poster film dengan AI generatif yang berjalan 100% offline (Stable Diffusion Turbo, ONNX).
+          body="PosterBioskopAI v2.0.4 — pembuat poster film dengan AI generatif yang berjalan 100% offline (Stable Diffusion Turbo, ONNX).
 
           ## Paket unduhan
           - **PosterBioskopAI-Windows.zip** — aplikasi utama (Windows 10/11 64-bit); ekstrak dulu, di dalamnya ada PosterBioskopAI.exe
@@ -236,6 +246,12 @@ jobs:
           2. Unduh kedua bagian model + GABUNG-MODEL.bat, taruh DI DALAM folder PosterBioskopAI (di samping PosterBioskopAI.exe).
           3. Double-click GABUNG-MODEL.bat — model terpasang di models\\sd-turbo-onnx di dalam folder aplikasi.
           4. Double-click PosterBioskopAI.exe — status Model AI: SIAP, tanpa internet.
+
+          ## Baru di v2.0.4 (perbaikan InvalidArgument saat AI menggambar)
+          - Feed model AI dikonversi otomatis ke tipe yang dideklarasikan sesi ONNX (float/fp16/int64/int32).
+          - Bila kernel ORT di CPU tertentu tetap menuntut tipe lain (kasus timestep int64 vs float), galat diparse dan dicoba ulang otomatis dengan tipe yang diminta.
+          - Sesi yang tetap gagal melaporkan nama sesi + tipe semua feed ke log (diagnostik lebih jelas).
+          - CI mencatat deklarasi input tiap sesi ONNX sebagai referensi dtype permanen.
 
           ## Baru di v2.0.3 (perbaikan tampilan pesan galat)
           - Memperbaiki NameError saat menampilkan jendela pesan galat (variabel target except dihapus Python saat blok berakhir).
