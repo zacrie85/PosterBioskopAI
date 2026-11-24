@@ -2,6 +2,10 @@
 """
 PosterBioskopAI — aplikasi desktop OFFLINE pembuat poster film ala Hollywood.
 
+Versi 2.0.3 — perbaikan bug tampilan pesan galat (NameError): variabel target
+  `except ... as exc` dihapus Python saat blok berakhir; lambda yang merujuknya
+  lewat after() kini memakai salinan teks galat, dan galat ASLI selalu terekam
+  utuh di log_kesalahan.txt sejak thread kerja.
 Versi 2.0.2 — perbaikan akar masalah crash: aplikasi dibangun mode onedir (DLL
   di path stabil, bukan ekstraksi sementara), DLL runtime C++ terbaru dijamin
   ikut di folder aplikasi, DLL mesin AI dimuat eksplisit sebelum dipakai, dan
@@ -383,7 +387,9 @@ class PosterApp(tk.Tk):
                         progress=lambda f, a, b: q.put((f, a, b)),
                         cancel=lambda: state["cancel"])
                 except Exception as exc:                       # noqa: BLE001
-                    win.after(0, lambda: lbl.config(text="Gagal: %s" % exc))
+                    catat_kesalahan(self._log, type(exc), exc, sys.exc_info()[2])
+                    pesan = "Gagal: %s" % exc
+                    win.after(0, lambda: lbl.config(text=pesan))
                     win.after(0, lambda: finish(False))
                     return
                 win.after(0, lambda: finish(done_ok))
@@ -413,7 +419,9 @@ class PosterApp(tk.Tk):
             try:
                 img, _, info = fp.extract_best_frame(path)
             except Exception as exc:                       # noqa: BLE001
-                self.after(0, lambda: messagebox.showerror("Gagal", str(exc)))
+                catat_kesalahan(self._log, type(exc), exc, sys.exc_info()[2])
+                pesan = "%s: %s" % (type(exc).__name__, exc)
+                self.after(0, lambda: messagebox.showerror("Gagal membaca video", pesan))
                 self.after(0, lambda: self.var_status.set("Gagal membaca video."))
                 return
             self.after(0, lambda: self._source_ready(img, info, from_video=True))
@@ -491,13 +499,18 @@ class PosterApp(tk.Tk):
                 poster = eng.compose_poster(art, judul, size=full, tagline=tagline,
                                             pemain=pemain, sutradara=sutradara)
             except Exception as exc:                       # noqa: BLE001
-                self.after(0, lambda: self._render_done())
+                # Catat galat ASLI seketika di thread kerja (traceback utuh ke
+                # log), lalu tampilkan via variabel lokal biasa — variabel
+                # target `except ... as exc` dihapus Python saat blok berakhir,
+                # jadi lambda yang merujuk `exc` langsung akan NameError.
+                catat_kesalahan(self._log, type(exc), exc, sys.exc_info()[2])
+                pesan = "%s: %s" % (type(exc).__name__, exc)
+                self.after(0, self._render_done)
                 self.after(0, lambda: messagebox.showerror(
                     "Gagal membuat poster",
-                    "%s: %s\n\nKalau ini terus terjadi, buka log_kesalahan.txt "
-                    "di samping aplikasi (atau kirim isinya)." % (
-                        exc.__class__.__name__, exc)))
-                self.after(0, lambda: self.var_status.set(f"Gagal render: {exc}"))
+                    "%s\n\nKalau ini terus terjadi, buka log_kesalahan.txt "
+                    "di samping aplikasi (atau kirim isinya)." % pesan))
+                self.after(0, lambda: self.var_status.set("Gagal render: %s" % pesan))
                 return
             self.after(0, lambda: self._show_preview(poster, preview))
         threading.Thread(target=work, daemon=True).start()

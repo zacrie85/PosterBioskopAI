@@ -3,6 +3,13 @@
 Aplikasi desktop Windows pembuat poster film ala Hollywood dari video/foto
 kamu — kini dengan **mesin AI generatif sungguhan yang berjalan 100% offline**.
 
+## Yang baru di v2.0.3 (perbaikan tampilan pesan galat)
+
+* Memperbaiki NameError saat menampilkan jendela pesan galat (bug closure:
+  variabel target `except ... as exc` dihapus Python saat blok berakhir).
+* Galat ASLI penyebab render gagal kini selalu terekam utuh di
+  `log_kesalahan.txt` sejak thread kerja — bukan hanya tampil di jendela.
+
 ## Yang baru di v2.0.2 (perbaikan akar masalah crash)
 
 * Aplikasi dibangun mode **ONEDIR** (folder aplikasi berisi EXE + _internal)

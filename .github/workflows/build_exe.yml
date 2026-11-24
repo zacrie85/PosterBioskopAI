@@ -223,7 +223,7 @@ jobs:
           test -n "$rel_id"
           echo "Release ID: $rel_id"
 
-          body="PosterBioskopAI v2.0.2 — pembuat poster film dengan AI generatif yang berjalan 100% offline (Stable Diffusion Turbo, ONNX).
+          body="PosterBioskopAI v2.0.3 — pembuat poster film dengan AI generatif yang berjalan 100% offline (Stable Diffusion Turbo, ONNX).
 
           ## Paket unduhan
           - **PosterBioskopAI-Windows.zip** — aplikasi utama (Windows 10/11 64-bit); ekstrak dulu, di dalamnya ada PosterBioskopAI.exe
@@ -236,6 +236,10 @@ jobs:
           2. Unduh kedua bagian model + GABUNG-MODEL.bat, taruh DI DALAM folder PosterBioskopAI (di samping PosterBioskopAI.exe).
           3. Double-click GABUNG-MODEL.bat — model terpasang di models\\sd-turbo-onnx di dalam folder aplikasi.
           4. Double-click PosterBioskopAI.exe — status Model AI: SIAP, tanpa internet.
+
+          ## Baru di v2.0.3 (perbaikan tampilan pesan galat)
+          - Memperbaiki NameError saat menampilkan jendela pesan galat (variabel target except dihapus Python saat blok berakhir).
+          - Galat ASLI penyebab render gagal kini selalu terekam utuh di log_kesalahan.txt sejak thread kerja — bukan hanya tampil sekilas di jendela.
 
           ## Baru di v2.0.2 (perbaikan akar masalah crash saat membuat poster)
           - Aplikasi dibangun mode ONEDIR menggantikan onefile — menghilangkan konflik pemuatan DLL penyebab access violation saat memuat mesin AI.
