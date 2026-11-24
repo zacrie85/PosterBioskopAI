@@ -385,6 +385,61 @@ def _sigma_schedule():
 # ---------------------------------------------------------------------------
 # Mesin AI
 # ---------------------------------------------------------------------------
+# DLL runtime C++ yang dibutuhkan pyd onnxruntime di Windows. Urutan penting:
+# runtime dulu, baru onnxruntime.dll, supaya Windows mengikat pyd ke salinan
+# yang benar — msvcp140 tua dari lokasi lain adalah penyebab "access violation"
+# saat memuat mesin AI di sebagian PC Windows.
+_ORT_DLL_URUTAN = (
+    "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll",
+    "onnxruntime.dll", "onnxruntime_providers_shared.dll",
+)
+
+
+def _dll_dirs_ort():
+    """Folder kandidat berisi DLL mesin AI (capi paket + akar aplikasi beku)."""
+    import importlib.util
+    dirs = []
+    spec = importlib.util.find_spec("onnxruntime")
+    if spec and spec.origin:
+        ort_dir = os.path.dirname(os.path.abspath(spec.origin))
+        dirs.append(os.path.join(ort_dir, "capi"))
+        dirs.append(ort_dir)
+    if getattr(sys, "frozen", False):
+        dirs.append(os.path.dirname(sys.executable))
+        dirs.append(getattr(sys, "_MEIPASS", ""))
+    else:
+        dirs.append(os.path.dirname(os.path.abspath(__file__)))
+    return [d for d in dirs if d and os.path.isdir(d)]
+
+
+def muat_dll_windows():
+    """Windows: muat DLL mesin AI secara eksplisit (path absolut) sebelum pyd
+    onnxruntime diimpor, agar Windows tidak salah memilih versi runtime C++
+    dari lokasi lain. DLL yang sudah termuat otomatis dilewati Windows.
+    Return daftar nama DLL yang berhasil dimuat."""
+    if sys.platform != "win32":
+        return []
+    import ctypes
+    dirs = _dll_dirs_ort()
+    for d in dirs:
+        try:
+            os.add_dll_directory(d)
+        except (AttributeError, OSError):
+            pass
+    dimuat = []
+    for dll in _ORT_DLL_URUTAN:
+        for d in dirs:
+            p = os.path.join(d, dll)
+            if os.path.isfile(p):
+                try:
+                    ctypes.WinDLL(p)
+                    dimuat.append(dll)
+                except OSError:
+                    pass
+                break
+    return dimuat
+
+
 class PosterAI:
     """Pipeline SD-Turbo img2img berbasis onnxruntime, sesi dimuat malas."""
 
@@ -401,6 +456,7 @@ class PosterAI:
         if name in self._sess:
             return self._sess[name]
         try:
+            muat_dll_windows()
             import onnxruntime as ort
         except Exception as exc:                       # noqa: BLE001
             raise RuntimeError(

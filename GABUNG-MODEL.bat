@@ -2,12 +2,14 @@
 rem ============================================================
 rem  GABUNG-MODEL.bat — pasang model AI PosterBioskopAI v2.0
 rem  Cara pakai:
-rem   1. Download KEDUA file dari halaman Release:
+rem   1. Ekstrak PosterBioskopAI-Windows.zip -> jadi folder PosterBioskopAI
+rem      berisi PosterBioskopAI.exe.
+rem   2. Download KEDUA file dari halaman Release:
 rem        PosterBioskopAI-Model-AI.zip.part00
 rem        PosterBioskopAI-Model-AI.zip.part01
-rem   2. Taruh kedua file (dan file bat ini) DI FOLDER YANG SAMA
-rem      dengan PosterBioskopAI.exe.
-rem   3. Double-click file ini. Selesai -> aplikasi 100% offline.
+rem   3. Taruh kedua file (dan file bat ini) DI DALAM folder
+rem      PosterBioskopAI (di samping PosterBioskopAI.exe).
+rem   4. Double-click file ini. Selesai -> aplikasi 100% offline.
 rem ============================================================
 cd /d "%~dp0"
 

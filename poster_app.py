@@ -2,6 +2,10 @@
 """
 PosterBioskopAI — aplikasi desktop OFFLINE pembuat poster film ala Hollywood.
 
+Versi 2.0.2 — perbaikan akar masalah crash: aplikasi dibangun mode onedir (DLL
+  di path stabil, bukan ekstraksi sementara), DLL runtime C++ terbaru dijamin
+  ikut di folder aplikasi, DLL mesin AI dimuat eksplisit sebelum dipakai, dan
+  mesin AI diperiksa di thread utama saat aplikasi dibuka.
 Versi 2.0.1 — perbaikan stabilitas: semua kesalahan (Python maupun crash level
   sistem) kini dicatat ke log_kesalahan.txt di samping aplikasi dan ditampilkan
   sebagai jendela pesan — tidak ada lagi mati diam-diam.
@@ -84,10 +88,21 @@ def catat_kesalahan(logf, tipe, nilai, tb):
         pass
 
 
+def tulis_log(logf, pesan):
+    """Tulis satu baris status ke log (dengan waktu)."""
+    try:
+        logf.write("[%s] %s\n" % (
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"), pesan))
+        logf.flush()
+    except Exception:                                  # noqa: BLE001
+        pass
+
+
 class PosterApp(tk.Tk):
     def __init__(self, log=None):
         super().__init__()
         self._log = log
+        self.cek_mesin_ai_awal()
         self.title("PosterBioskopAI — Pembuat Poster Film AI (Offline)")
         self.geometry("1200x800")
         self.minsize(1000, 660)
@@ -114,6 +129,26 @@ class PosterApp(tk.Tk):
             "Terjadi kesalahan",
             "%s: %s\n\nDetail teknis ada di log_kesalahan.txt di samping aplikasi."
             % (nama, val))
+
+    def cek_mesin_ai_awal(self):
+        """Muat mesin AI sekali di thread utama saat aplikasi dibuka: masalah
+        DLL terlihat sejak awal (tercatat di log + pesan jelas), bukan mati
+        diam-diam saat tombol Buat Poster diklik."""
+        def cek():
+            try:
+                import onnxruntime as ort
+            except Exception as exc:                   # noqa: BLE001
+                catat_kesalahan(self._log, type(exc), exc, sys.exc_info()[2])
+                messagebox.showerror(
+                    "Mesin AI tidak bisa dimuat",
+                    "Komponen AI (onnxruntime) gagal dimuat di PC ini:\n%s\n\n"
+                    "Solusi paling umum: jalankan vc_redist.x64.exe (unduh dari "
+                    "halaman Release), lalu buka aplikasi lagi.\n"
+                    "Detail teknis: log_kesalahan.txt di samping aplikasi." % exc)
+                return
+            tulis_log(self._log, "Mesin AI siap sejak awal: onnxruntime %s"
+                      % ort.__version__)
+        self.after(400, cek)
 
     # ------------------------------------------------------------------ UI
     def _style_ui(self):

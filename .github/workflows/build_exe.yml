@@ -31,19 +31,42 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Build EXE (PyInstaller, font ikut dikemas)
+      - name: Build EXE (PyInstaller ONEDIR, font ikut dikemas)
         run: |
           python make_icon.py
-          pyinstaller --noconfirm --onefile --windowed --name PosterBioskopAI --icon=icon.ico --add-data "assets;assets" --collect-all onnxruntime poster_app.py
+          pyinstaller --noconfirm --onedir --windowed --name PosterBioskopAI --icon=icon.ico --add-data "assets;assets" --collect-all onnxruntime poster_app.py
 
-      - name: Simpan EXE sebagai artifact
+      - name: Uji mesin AI di Windows asli (OrtProbe — titik crash pengguna)
+        run: |
+          pyinstaller --noconfirm --onedir --name OrtProbe --collect-all onnxruntime ort_probe.py
+          dist\OrtProbe\OrtProbe.exe
+          if ($LASTEXITCODE -ne 0) { throw "onnxruntime gagal dimuat di bundel PyInstaller Windows — rilis diblokir!" }
+          Write-Host "OrtProbe LULUS: pyd onnxruntime termuat mulus di Windows."
+
+      - name: Pastikan runtime C++ terbaru ikut di folder aplikasi
+        run: |
+          $dst = "dist\PosterBioskopAI"
+          foreach ($dll in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
+            Copy-Item "C:\Windows\System32\$dll" $dst -Force
+            Write-Host ("runtime {0} = {1}" -f $dll, (Get-Item (Join-Path $dst $dll)).VersionInfo.FileVersion)
+          }
+
+      - name: Kemas folder aplikasi jadi ZIP + unduh VC++ Redistributable
+        run: |
+          Compress-Archive -Path dist\PosterBioskopAI -DestinationPath dist\PosterBioskopAI-Windows.zip -Force
+          Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile dist\vc_redist.x64.exe
+          Get-ChildItem dist | Select-Object Name, Length
+
+      - name: Simpan paket sebagai artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PosterBioskopAI-Windows-EXE
-          path: dist/PosterBioskopAI.exe
+          name: PosterBioskopAI-Windows
+          path: |
+            dist/PosterBioskopAI-Windows.zip
+            dist/vc_redist.x64.exe
           if-no-files-found: error
 
-      - name: Tempel EXE ke release (saat push tag v*)
+      - name: Tempel paket ke release (saat push tag v*)
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -53,7 +76,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --title "PosterBioskopAI $env:GITHUB_REF_NAME" --notes "Poster AI generatif lokal (Stable Diffusion Turbo)."
           }
-          gh release upload $env:GITHUB_REF_NAME dist/PosterBioskopAI.exe --clobber --repo $env:GITHUB_REPOSITORY
+          gh release upload $env:GITHUB_REF_NAME dist/PosterBioskopAI-Windows.zip dist/vc_redist.x64.exe --clobber --repo $env:GITHUB_REPOSITORY
 
   smoke-test:
     runs-on: ubuntu-latest
@@ -200,17 +223,25 @@ jobs:
           test -n "$rel_id"
           echo "Release ID: $rel_id"
 
-          body="PosterBioskopAI v2.0.1 — pembuat poster film dengan AI generatif yang berjalan 100% offline (Stable Diffusion Turbo, ONNX).
+          body="PosterBioskopAI v2.0.2 — pembuat poster film dengan AI generatif yang berjalan 100% offline (Stable Diffusion Turbo, ONNX).
 
           ## Paket unduhan
-          - **PosterBioskopAI.exe** — aplikasi utama (Windows 10/11 64-bit)
+          - **PosterBioskopAI-Windows.zip** — aplikasi utama (Windows 10/11 64-bit); ekstrak dulu, di dalamnya ada PosterBioskopAI.exe
           - **PosterBioskopAI-Model-AI.zip.part00 & part01** — model AI (±2,5 GB), wajib untuk mode AI penuh
           - **GABUNG-MODEL.bat** — penggabung & pemasang model otomatis
+          - **vc_redist.x64.exe** — pembaruan runtime resmi Microsoft; jalankan HANYA jika muncul pesan tentang mesin AI/runtime
 
           ## Cara pasang (sekali saja)
-          1. Unduh EXE, kedua bagian model, dan GABUNG-MODEL.bat ke SATU folder.
-          2. Double-click GABUNG-MODEL.bat — model terpasang otomatis di folder models\\sd-turbo-onnx.
-          3. Double-click PosterBioskopAI.exe — status Model AI: SIAP, tanpa internet.
+          1. Ekstrak PosterBioskopAI-Windows.zip → ada folder PosterBioskopAI berisi aplikasi.
+          2. Unduh kedua bagian model + GABUNG-MODEL.bat, taruh DI DALAM folder PosterBioskopAI (di samping PosterBioskopAI.exe).
+          3. Double-click GABUNG-MODEL.bat — model terpasang di models\\sd-turbo-onnx di dalam folder aplikasi.
+          4. Double-click PosterBioskopAI.exe — status Model AI: SIAP, tanpa internet.
+
+          ## Baru di v2.0.2 (perbaikan akar masalah crash saat membuat poster)
+          - Aplikasi dibangun mode ONEDIR menggantikan onefile — menghilangkan konflik pemuatan DLL penyebab "access violation" saat memuat mesin AI.
+          - Runtime C++ terbaru (msvcp140/vcruntime140/vcruntime140_1) dijamin ikut di folder aplikasi.
+          - DLL mesin AI dimuat eksplisit sebelum dipakai; mesin AI diperiksa saat aplikasi dibuka (masalah terlihat dengan pesan jelas, bukan menutup diam-diam).
+          - OrtProbe: build otomatis menguji pemuatan mesin AI di Windows asli — versi yang gagal tidak akan pernah dirilis.
 
           ## Baru di v2.0.1
           - Perbaikan stabilitas: setiap kesalahan kini tampil sebagai pesan dan terekam di log_kesalahan.txt di samping aplikasi — tidak ada lagi aplikasi menutup sendiri tanpa penjelasan.

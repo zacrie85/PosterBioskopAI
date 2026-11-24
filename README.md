@@ -24,11 +24,14 @@ desain — tanpa internet, tanpa API key.
 
 ## Instalasi (Windows)
 
-1. Buka [Releases](https://github.com/zacrie85/PosterBioskopAI/releases) → unduh
-   **4 file** ke SATU folder: `PosterBioskopAI.exe`,
-   `PosterBioskopAI-Model-AI.zip.part00`, `...part01`, dan `GABUNG-MODEL.bat`.
-2. Double-click **`GABUNG-MODEL.bat`** → model AI (±2,5 GB) terpasang otomatis.
-3. Double-click **`PosterBioskopAI.exe`** → selesai; selanjutnya 100% offline.
+1. Buka [Releases](https://github.com/zacrie85/PosterBioskopAI/releases) → dari
+   rilis terbaru unduh: **PosterBioskopAI-Windows.zip**,
+   `PosterBioskopAI-Model-AI.zip.part00` + `...part01`, dan `GABUNG-MODEL.bat`.
+2. **Ekstrak ZIP** → muncul folder `PosterBioskopAI`. Taruh kedua bagian model
+   dan `GABUNG-MODEL.bat` **di dalam folder itu** (di samping
+   `PosterBioskopAI.exe`).
+3. Double-click **`GABUNG-MODEL.bat`** → model AI (±2,5 GB) terpasang otomatis.
+4. Double-click **`PosterBioskopAI.exe`** → selesai; selanjutnya 100% offline.
 
 Pakai Python (Windows/Linux/macOS): install [Python 3.9+](https://www.python.org/downloads/)
 (centang *Add to PATH*), lalu `pip install -r requirements.txt` dan
@@ -66,6 +69,9 @@ Ingin build EXE sendiri? Jalankan `build_windows.bat`.
   level sistem seperti DLL yang hilang atau CPU lama tanpa AVX2) dicatat ke
   **`log_kesalahan.txt`** di samping aplikasi/EXE. Buka file itu untuk melihat
   penyebabnya; kirim isinya kalau butuh bantuan.
+* **Pesan tentang mesin AI / runtime C++** — jalankan **`vc_redist.x64.exe`**
+  dari halaman Release (pembaruan runtime resmi Microsoft), lalu buka aplikasi
+  lagi. Sejak v2.0.2 runtime C++ terbaru juga sudah ikut di folder aplikasi.
 * **Poster gagal dibuat** — penyebabnya muncul sebagai jendela pesan; detail
   teknis tetap terekam di `log_kesalahan.txt`.
 * **Model AI belum lengkap** — klik 🤖 **Status Model AI** → Unduh. Unduhan

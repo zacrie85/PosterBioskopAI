@@ -3,6 +3,18 @@
 Aplikasi desktop Windows pembuat poster film ala Hollywood dari video/foto
 kamu — kini dengan **mesin AI generatif sungguhan yang berjalan 100% offline**.
 
+## Yang baru di v2.0.2 (perbaikan akar masalah crash)
+
+* Aplikasi dibangun mode **ONEDIR** (folder aplikasi berisi EXE + _internal)
+  menggantikan onefile — menghilangkan konflik pemuatan DLL penyebab
+  "access violation" saat memuat mesin AI di sebagian PC Windows.
+* Runtime C++ terbaru (msvcp140/vcruntime140/vcruntime140_1) **dijamin ikut**
+  di folder aplikasi; DLL mesin AI dimuat eksplisit sebelum dipakai.
+* Mesin AI diperiksa di thread utama saat aplikasi dibuka — masalah terlihat
+  dengan pesan jelas, bukan mati diam-diam saat klik.
+* Build kini otomatis menguji pemuatan mesin AI di Windows asli (OrtProbe)
+  sebelum dirilis; paket VC++ Redistributable tersedia di halaman Release.
+
 ## Yang baru di v2.0.1 (perbaikan stabilitas)
 
 Aplikasi tidak lagi mati diam-diam: SEMUA kesalahan — Python maupun crash level
@@ -49,9 +61,11 @@ video di-"gambar ulang" AI menjadi key art poster sinematik sesuai prompt.
 "🤖 Status Model AI…" → "⬇ Unduh / Lanjutkan Model AI". Unduhan bisa
 dilanjutkan kalau terputus.
 
-**Cara 2 — manual dari halaman Release:** download
-`PosterBioskopAI-Model-AI.zip.part00` dan `.part01`, taruh di folder EXE,
-lalu double-click `GABUNG-MODEL.bat`.
+**Cara 2 — manual dari halaman Release:** ekstrak dulu
+`PosterBioskopAI-Windows.zip` jadi folder aplikasi; download
+`PosterBioskopAI-Model-AI.zip.part00` dan `.part01`, taruh DI DALAM folder
+aplikasi itu (di samping `PosterBioskopAI.exe`), lalu double-click
+`GABUNG-MODEL.bat`.
 
 Setelah terpasang, aplikasi tidak butuh internet lagi.
 
@@ -89,6 +103,9 @@ python batch_poster.py <folder> --prompt "poster malam kabut neon biru"
 * **Aplikasi menutup sendiri / poster gagal dibuat** — buka `log_kesalahan.txt`
   di samping aplikasi: setiap penyebab kesalahan terekam di situ (sejak
   v2.0.1). Kirim isinya kalau butuh bantuan.
+* **Pesan tentang mesin AI / runtime C++** — jalankan `vc_redist.x64.exe`
+  dari halaman Release (pembaruan runtime resmi Microsoft), lalu buka aplikasi
+  lagi. Sejak v2.0.2 runtime C++ terbaru juga sudah ikut di folder aplikasi.
 * **Model AI belum lengkap** — tombol "🤖 Status Model AI" untuk mengunduh
   atau melanjutkan unduhan yang terputus.
 * **PC terasa lambat** — pilih kualitas "Cepat (1 langkah)" di menu Kualitas.
