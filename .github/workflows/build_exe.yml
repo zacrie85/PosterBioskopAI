@@ -238,7 +238,7 @@ jobs:
           4. Double-click PosterBioskopAI.exe — status Model AI: SIAP, tanpa internet.
 
           ## Baru di v2.0.2 (perbaikan akar masalah crash saat membuat poster)
-          - Aplikasi dibangun mode ONEDIR menggantikan onefile — menghilangkan konflik pemuatan DLL penyebab "access violation" saat memuat mesin AI.
+          - Aplikasi dibangun mode ONEDIR menggantikan onefile — menghilangkan konflik pemuatan DLL penyebab access violation saat memuat mesin AI.
           - Runtime C++ terbaru (msvcp140/vcruntime140/vcruntime140_1) dijamin ikut di folder aplikasi.
           - DLL mesin AI dimuat eksplisit sebelum dipakai; mesin AI diperiksa saat aplikasi dibuka (masalah terlihat dengan pesan jelas, bukan menutup diam-diam).
           - OrtProbe: build otomatis menguji pemuatan mesin AI di Windows asli — versi yang gagal tidak akan pernah dirilis.
