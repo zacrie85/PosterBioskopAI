@@ -3,6 +3,20 @@
 Aplikasi desktop Windows pembuat poster film ala Hollywood dari video/foto
 kamu — kini dengan **mesin AI generatif sungguhan yang berjalan 100% offline**.
 
+## Yang baru di v2.1.0 (kamus besar + 131 template)
+
+* **Kamus terjemahan Indonesia→Inggris dibesarkan ±150 → ~590 entri** —
+  prompt bahasa sehari-hari ("nelayan tua di pantai saat senja", "pasukan
+  zombie menyerang kota besar") kini diterjemahkan utuh untuk AI: frasa
+  2-4 kata dipadankan dulu, kata sambung dibuang, kata tak dikenal diteruskan.
+* **131 template layout bergaya Hollywood** (desain ORIGINAL, bukan karya
+  berhak cipta): 15 keluarga (Klasik, Letterbox, Festival Laurel, Komedi
+  Bundar, Minimalis Putih, Bingkai, Badge, Duotone, dll) × 10 palet warna.
+* Pilih template lewat dropdown **Template** di panel kiri; tombol 📁
+  membuka folder `templates\` — taruh PNG transparan milikmu (dipasang DI
+  ATAS key art) atau JPEG (jadi latar, art dilebur) lalu klik 📁 lagi.
+* Mode batch ikut mendukung template: `--template "nama-template"`.
+
 ## Yang baru di v2.0.5 (perbaikan kualitas AI yang sesungguhnya)
 
 * Bug penting: preset kualitas lama (strength < 1.0) ternyata **melompati

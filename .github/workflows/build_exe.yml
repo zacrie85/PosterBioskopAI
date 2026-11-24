@@ -147,12 +147,17 @@ jobs:
         timeout-minutes: 25
         run: python batch_poster.py video_uji --out hasil_ai --rasio "9:16" --kualitas "Cepat (1 langkah)"
 
+      - name: Uji template bawaan (batch dengan template)
+        timeout-minutes: 25
+        run: python batch_poster.py video_uji --out hasil_ai_template --rasio "9:16" --kualitas "Cepat (1 langkah)" --template "$(python -c "import template_engine as te; print([t['nama'] for t in te.list_templates() if t['nama'].startswith('klasik-emas')][0])")"
+
       - name: Simpan contoh poster AI sebagai artifact
         uses: actions/upload-artifact@v4
         with:
           name: contoh-poster-AI-asli
           path: |
             hasil_ai/*.png
+            hasil_ai_template/*.png
             video_uji/VID_20250101_bukit_cahaya_senja.mp4
           if-no-files-found: error
 
@@ -233,7 +238,7 @@ jobs:
           test -n "$rel_id"
           echo "Release ID: $rel_id"
 
-          body="PosterBioskopAI v2.0.5 — pembuat poster film dengan AI generatif yang berjalan 100% offline (Stable Diffusion Turbo, ONNX).
+          body="PosterBioskopAI v2.1.0 — pembuat poster film dengan AI generatif yang berjalan 100% offline (Stable Diffusion Turbo, ONNX).
 
           ## Paket unduhan
           - **PosterBioskopAI-Windows.zip** — aplikasi utama (Windows 10/11 64-bit); ekstrak dulu, di dalamnya ada PosterBioskopAI.exe
@@ -246,6 +251,12 @@ jobs:
           2. Unduh kedua bagian model + GABUNG-MODEL.bat, taruh DI DALAM folder PosterBioskopAI (di samping PosterBioskopAI.exe).
           3. Double-click GABUNG-MODEL.bat — model terpasang di models\\sd-turbo-onnx di dalam folder aplikasi.
           4. Double-click PosterBioskopAI.exe — status Model AI: SIAP, tanpa internet.
+
+          ## Baru di v2.1.0 (kamus besar + 131 template)
+          - Kamus terjemahan Indonesia ke Inggris dibesarkan menjadi sekitar 590 entri — prompt bahasa sehari-hari kini diterjemahkan utuh untuk AI (frasa 2-4 kata dipadankan dulu, kata sambung dibuang).
+          - 131 template layout bergaya Hollywood (desain ORIGINAL): 15 keluarga (Klasik, Letterbox, Festival Laurel, Komedi Bundar, Minimalis Putih, Bingkai, Badge, Duotone, dll) kali 10 palet warna, lengkap dengan zona judul/tagline/tanggal.
+          - Dropdown Template di panel kiri + tombol untuk membuka folder templates: taruh PNG transparan milikmu (di atas key art) atau JPEG (jadi latar, art dilebur), lalu segarkan.
+          - Mode batch mendukung template lewat argumen --template.
 
           ## Baru di v2.0.5 (perbaikan kualitas AI yang sesungguhnya)
           - Bug penting: preset kualitas lama dengan strength di bawah 1.0 ternyata melompati SEMUA langkah UNet — hasilnya hanya round-trip VAE (frame yang dihaluskan), bukan gambar AI.

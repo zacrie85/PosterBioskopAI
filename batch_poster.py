@@ -53,7 +53,8 @@ def _unique_name(judul, used):
     return name
 
 
-def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None):
+def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None,
+                template=None):
     """Proses satu file: frame -> AI -> poster tipografi. Return dict ringkasan."""
     t0 = time.time()
     is_vid = fp.is_video(path)
@@ -78,7 +79,7 @@ def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None):
         engine = ai.PosterAI(keep_loaded=True)
         process_one._engine = engine                  # sesi model dipakai ulang
     art = engine.generate(img, prompt, canvas, quality_key=kualitas, progress=prog)
-    poster = eng.compose_poster(art, judul, size=full)
+    poster = eng.compose_poster(art, judul, size=full, template=template)
     out_path = os.path.join(out_dir, _unique_name(judul, used) + ".png")
     poster.save(out_path, quality=92)
     return {
@@ -95,7 +96,7 @@ def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None):
 
 def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
               kualitas="Normal (2 langkah)", log=None, progress=None,
-              should_continue=None):
+              should_continue=None, template=None):
     """Proses SEMUA video/foto di folder dengan SATU prompt AI yang sama.
 
     log(msg)               -> pesan kemajuan (mis. untuk Text di GUI / print)
@@ -141,7 +142,8 @@ def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
         progress(done, n, name)
         log(f"[{i + 1}/{n}] {name} …")
         try:
-            r = process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=log)
+            r = process_one(path, out_dir, ratio_key, prompt, kualitas, used,
+                            log=log, template=template)
             hasil.append(r)
             done += 1
             sumber = f"detik {r['detik']} dari video" if r["video"] else "foto"
@@ -184,10 +186,14 @@ def main():
                     help="prompt AI untuk SEMUA file (bawaan: prompt sinematik Hollywood)")
     ap.add_argument("--kualitas", default="Normal (2 langkah)",
                     choices=list(ai.QUALITY_PRESETS.keys()))
+    ap.add_argument("--template", default="Tanpa",
+                    help="nama template di folder templates/ (mis. 'klasik-emas-063') "
+                         "atau path file PNG/JPG; 'Tanpa' = tipografi bawaan")
     a = ap.parse_args()
 
     try:
-        res = run_batch(a.folder, a.out, a.rasio, a.prompt, a.kualitas, log=print)
+        res = run_batch(a.folder, a.out, a.rasio, a.prompt, a.kualitas, log=print,
+                        template=a.template)
     except (ValueError, RuntimeError) as exc:
         # pesan ramah (folder kosong, model belum lengkap, mesin AI gagal) —
         # bukan traceback mentah

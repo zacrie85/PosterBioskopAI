@@ -1,0 +1,15 @@
+{
+ "judul": [
+  0.06,
+  0.74,
+  0.94,
+  0.88
+ ],
+ "garis": true,
+ "tanggal": true,
+ "billing": true,
+ "aksen": "#3FA34D",
+ "warna": "#F7F6F4",
+ "keluarga": "Badge",
+ "palet": "Rimba"
+}

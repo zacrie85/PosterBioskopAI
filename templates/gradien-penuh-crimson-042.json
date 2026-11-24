@@ -1,0 +1,15 @@
+{
+ "judul": [
+  0.06,
+  0.72,
+  0.94,
+  0.88
+ ],
+ "garis": true,
+ "tanggal": true,
+ "billing": true,
+ "aksen": "#E23B3B",
+ "warna": "#F7F6F4",
+ "keluarga": "Gradien Penuh",
+ "palet": "Crimson"
+}

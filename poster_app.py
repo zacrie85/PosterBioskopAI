@@ -2,6 +2,11 @@
 """
 PosterBioskopAI — aplikasi desktop OFFLINE pembuat poster film ala Hollywood.
 
+Versi 2.1.0 — pemahaman prompt & template: kamus terjemahan Indonesia→
+  Inggris dibesarkan menjadi ~590 entri (frasa 2-4 kata dipadankan dulu),
+  plus 131 template layout bergaya Hollywood (15 keluarga x 10 palet) di
+  folder templates\ — pilih di dropdown Template, atau taruh PNG transparan
+  (mode overlay) / JPEG (mode latar) milikmu sendiri di folder itu.
 Versi 2.0.5 — perbaikan kualitas AI yang sesungguhnya: preset kualitas lama
   dengan strength < 1.0 ternyata melompati SEMUA langkah UNet (hasilnya hanya
   round-trip VAE, bukan AI!). Kini semua preset menjalankan UNet sesuai
@@ -61,6 +66,7 @@ import batch_poster as bp
 import poster_ai as ai
 import poster_engine as eng
 import frame_picker as fp
+import template_engine as te
 
 BG = "#141420"
 PANEL = "#1c1c2a"
@@ -198,6 +204,7 @@ class PosterApp(tk.Tk):
         self.var_rasio = tk.StringVar(value=ai.RASIOS[0])
         self.var_batch_rasio = tk.StringVar(value=ai.RASIOS[0])
         self.var_kualitas = tk.StringVar(value="Normal (2 langkah)")
+        self.var_template = tk.StringVar(value="Tanpa template")
         self.var_file = tk.StringVar(value="Belum ada video/foto dipilih")
         self.var_model = tk.StringVar(value="Model AI: memeriksa…")
         self.var_status = tk.StringVar(value="Selamat datang! Pilih video/foto untuk mulai.")
@@ -269,6 +276,20 @@ class PosterApp(tk.Tk):
         ttk.Label(row, text="Kualitas:", style="Panel.TLabel").pack(side="left")
         ttk.Combobox(row, textvariable=self.var_kualitas, state="readonly",
                      values=list(ai.QUALITY_PRESETS.keys()), width=18).pack(side="left")
+        rowt = ttk.Frame(f4)
+        rowt.pack(fill="x", pady=(5, 0))
+        ttk.Label(rowt, text="Template:", style="Panel.TLabel").pack(side="left")
+        self.cmb_template = ttk.Combobox(rowt, textvariable=self.var_template,
+                                         state="readonly", width=26)
+        self._refresh_template_values()
+        self.cmb_template.pack(side="left", padx=6, fill="x", expand=True)
+        ttk.Button(rowt, text="📁", width=3,
+                   command=self.buka_folder_template).pack(side="left")
+        ttk.Label(f4, text="131 template bawaan + PNG/JPG milikmu: taruh di "
+                           "folder templates\\ lalu klik 📁 (PNG transparan "
+                           "= di atas art, JPEG = latar).",
+                  style="Dim.TLabel", wraplength=350, justify="left").pack(
+                      anchor="w", pady=(3, 0))
         rowv = ttk.Frame(f4)
         rowv.pack(fill="x", pady=(5, 0))
         ttk.Button(rowv, text="🎲 Variasi Baru (acak AI)",
@@ -415,6 +436,18 @@ class PosterApp(tk.Tk):
         btn_dl.pack(side="left", padx=4)
         ttk.Button(rowd, text="Tutup", command=win.destroy).pack(side="left", padx=4)
 
+    def _refresh_template_values(self):
+        self.cmb_template["values"] = (["Tanpa template"]
+                                       + [t["nama"] for t in te.list_templates()])
+
+    def buka_folder_template(self):
+        d = te.folder_templates()
+        os.makedirs(d, exist_ok=True)
+        self._refresh_template_values()
+        self.var_status.set("Folder templates dibuka. Taruh PNG/JPG di situ, "
+                            "lalu pilih di dropdown (klik 📁 lagi untuk segarkan).")
+        bp.open_folder(d)
+
     # ------------------------------------------------------------ sumber
     def pilih_video(self):
         path = filedialog.askopenfilename(title="Pilih video", filetypes=VIDEO_TYPES)
@@ -492,6 +525,7 @@ class PosterApp(tk.Tk):
         video_ratio = img_src.size[0] / max(1, img_src.size[1])
         size = ai.ai_canvas(rasio_key, video_ratio)
         quality = self.var_kualitas.get()
+        template_path = te.cari_template(self.var_template.get())
         prompt = self._prompt_text() or ai.DEFAULT_PROMPT
         judul, tagline, pemain, sutradara = (self.var_judul.get(), self.var_tagline.get(),
                                              self.var_pemain.get(), self.var_sutradara.get())
@@ -506,7 +540,8 @@ class PosterApp(tk.Tk):
                 art = self.poster_ai.generate(img_src, prompt, size,
                                               quality_key=quality, progress=prog)
                 poster = eng.compose_poster(art, judul, size=full, tagline=tagline,
-                                            pemain=pemain, sutradara=sutradara)
+                                            pemain=pemain, sutradara=sutradara,
+                                            template=template_path)
             except Exception as exc:                       # noqa: BLE001
                 # Catat galat ASLI seketika di thread kerja (traceback utuh ke
                 # log), lalu tampilkan via variabel lokal biasa — variabel
@@ -574,6 +609,7 @@ class PosterApp(tk.Tk):
         size = ai.ai_canvas(rasio_key, video_ratio)
         full = ai.poster_full_size(rasio_key, video_ratio)
         quality = self.var_kualitas.get()
+        template_path = te.cari_template(self.var_template.get())
         prompt = self._prompt_text() or ai.DEFAULT_PROMPT
         judul_v, tagline, pemain, sutradara = (self.var_judul.get(), self.var_tagline.get(),
                                                self.var_pemain.get(), self.var_sutradara.get())
@@ -583,7 +619,8 @@ class PosterApp(tk.Tk):
                 art = self.poster_ai.generate(img_src, prompt, size,
                                               quality_key=quality)
                 poster = eng.compose_poster(art, judul_v, size=full, tagline=tagline,
-                                            pemain=pemain, sutradara=sutradara)
+                                            pemain=pemain, sutradara=sutradara,
+                                            template=template_path)
                 poster.save(path, quality=92)
                 ok, err, p = True, None, path
             except Exception as exc:                       # noqa: BLE001

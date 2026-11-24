@@ -27,6 +27,8 @@ import urllib.request
 import numpy as np
 from PIL import Image
 
+import kamus_prompt
+
 RESAMPLE = getattr(Image, "Resampling", Image).LANCZOS
 
 # ---------------------------------------------------------------------------
@@ -42,47 +44,10 @@ _BASE_STYLE = ("cinematic hollywood movie poster key art, modern design, "
                "highly detailed, sharp focus")
 
 # ---------------------------------------------------------------------------
-# Kamus prompt Indonesia -> Inggris (dipahami model gambar).
-# Kata yang tidak dikenal tetap diteruskan apa adanya.
+# Kamus prompt Indonesia -> Inggris: besar (~590 entri) di kamus_prompt.py,
+# frasa 2-4 kata dipadankan lebih dulu. Alias di bawah untuk kompatibilitas.
 # ---------------------------------------------------------------------------
-_TRANSLATE = {
-    "rubahlah": "", "rubah": "", "ubahlah": "", "ubah": "", "buatlah": "",
-    "buat": "", "jadikan": "", "gambarnya": "", "gambar": "", "ini": "",
-    "untuk": "", "untuklah": "", "sebuah": "", "filmnya": "", "ke": "", "di": "",
-    "dengan": "", "yang": "", "itu": "", "dan": "", "atau": "", "seperti": "",
-    "sebagai": "", "menjadi": "", "menggunakan": "", "judulnya": "", "videonya": "",
-    "posternya": "", "kita": "", "semua": "", "kawan": "", "juga": "", "kepada": "", "poster": "movie poster", "judul": "title", "video": "video",
-    "holywood": "hollywood", "hollywood": "hollywood", "bioskop": "cinema",
-    "sinematik": "cinematic", "sinematiknya": "cinematic", "sinema": "cinema",
-    "modern": "modern", "moderen": "modern", "kekinian": "modern",
-    "gaya": "style", "bergaya": "style", "ala": "style",
-    "klasik": "classic", "vintage": "vintage", "retro": "retro", "futuristik": "futuristic",
-    "epik": "epic", "epis": "epic", "megah": "epic", "grand": "epic",
-    "dramatis": "dramatic", "drama": "drama", "romantis": "romantic", "romance": "romantic",
-    "horor": "horror", "seram": "horror", "menyeramkan": "scary", "mistis": "mystical",
-    "aksi": "action", "tempur": "combat", "perang": "war", "petualangan": "adventure",
-    "komedi": "comedy", "lucu": "funny", "fantasi": "fantasy", "ajaib": "magical",
-    "dongeng": "fairytale", "fiksi": "science", "ilmiah": "fiction", "sci-fi": "science fiction",
-    "detektif": "detective", "misteri": "mystery", "thriller": "thriller", "kriminal": "crime",
-    "gelap": "dark", "terang": "bright", "malam": "night", "siang": "daylight",
-    "senja": "sunset", "fajar": "dawn", "matahari": "sun", "bulan": "moon",
-    "kabut": "fog", "berkabut": "foggy", "hujan": "rain", "mendung": "storm",
-    "badai": "storm", "salju": "snow", "berlampu": "neon", "neon": "neon",
-    "hangat": "warm", "dingin": "cold", "sejuk": "cool", "emas": "golden",
-    "keemasan": "golden", "merah": "red", "biru": "blue", "hijau": "green",
-    "ungu": "purple", "hitam": "black", "putih": "white", "berwarna": "colorful",
-    "gelapnya": "darkness", "teal": "teal", "oranye": "orange",
-    "gunung": "mountains", "pegunungan": "mountains", "laut": "ocean", "pantai": "beach",
-    "kota": "city", "metropolitan": "city", "desa": "village", "hutan": "forest",
-    "gurun": "desert", "langit": "sky", "jalan": "road", "tropis": "tropical",
-    "indonesia": "indonesia", "jakarta": "jakarta", "bali": "bali",
-    "mewah": "luxury", "elegan": "elegant", "bersih": "clean", "kuat": "powerful",
-    "heroik": "heroic", "pahlawan": "hero", "jarah": "epic", "mengerikan": "terrifying",
-    "berdebu": "dusty", "keren": "cool", "kerenya": "cool", "gagah": "heroic",
-    "cahaya": "light", "silhouette": "silhouette", "bayangan": "shadow",
-    "kartun": "cartoon", "anime": "anime", "lukisan": "painting", "cat": "painting",
-    "sketsa": "sketch", "realistis": "photorealistic", "foto": "photographic",
-}
+_TRANSLATE = kamus_prompt.KAMUS
 
 # ---------------------------------------------------------------------------
 # Model & distribusi
@@ -237,27 +202,13 @@ QUALITY_PRESETS = {
 # Prompt Indonesia -> Inggris
 # ---------------------------------------------------------------------------
 def build_style_prompt(user_prompt):
-    """Terjemahkan prompt pengguna ke kata kunci gaya Inggris yang dipahami AI.
-    Tulisan JUDUL di poster diurus mesin tipografi, bukan AI."""
+    """Terjemahkan prompt pengguna ke kata kunci gaya Inggris yang dipahami AI
+    (kamus besar ~590 entri di kamus_prompt.py; frasa 2-4 kata dipadankan
+    dulu, kata sambung dibuang). Tulisan JUDUL di poster diurus mesin
+    tipografi, bukan AI."""
     text = (user_prompt or "").strip() or DEFAULT_PROMPT
-    text = re.sub(r"[^A-Za-z\s\-]", " ", text.lower())
-    words = text.split()
-    out, i = [], 0
-    while i < len(words):
-        two = " ".join(words[i:i + 2])
-        if two in _TRANSLATE:
-            out.append(_TRANSLATE[two])
-            i += 2
-            continue
-        out.append(_TRANSLATE.get(words[i], words[i]))
-        i += 1
-    extra = [w for w in out if w]
-    seen, uniq = set(), []
-    for w in " ".join(extra).split():
-        if w not in seen:
-            seen.add(w)
-            uniq.append(w)
-    return _BASE_STYLE + ", " + ", ".join(uniq[:14])
+    terms = kamus_prompt.terjemah_prompt(text)[:14]
+    return _BASE_STYLE + ", " + ", ".join(terms)
 
 
 # ---------------------------------------------------------------------------

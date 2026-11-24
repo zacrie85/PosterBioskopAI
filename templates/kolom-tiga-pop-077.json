@@ -1,0 +1,15 @@
+{
+ "judul": [
+  0.06,
+  0.06,
+  0.94,
+  0.2
+ ],
+ "garis": false,
+ "tanggal": false,
+ "billing": true,
+ "aksen": "#FF5D8F",
+ "warna": "#F7F6F4",
+ "keluarga": "Kolom Tiga",
+ "palet": "Pop"
+}

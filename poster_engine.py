@@ -198,9 +198,17 @@ def _tracked_fit(text, font, max_w, base_tracking):
 # ---------------------------------------------------------------------------
 def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
                    sutradara="", studio="POSTER BIOSKOP PICTURES",
-                   release="SEGERA DI BIOSKOP", seed=7):
+                   release="SEGERA DI BIOSKOP", seed=7, template=None):
     """Susun poster final: key art AI + tipografi dengan margin aman.
+    Kalau `template` diisi (path file di folder templates/ atau path
+    langsung), susunan visual mengikuti template itu (template_engine).
     Return PIL RGB image berukuran `size`."""
+    if template:
+        import template_engine                       # hindari impor melingkar
+        return template_engine.compose(art, title, template, size=size,
+                                       tagline=tagline, pemain=pemain,
+                                       sutradara=sutradara, release=release,
+                                       studio=studio)
     W, H = size
     art = ImageOps.exif_transpose(art).convert("RGB")
     art = cover_crop(art, W / H, focus=0.45).resize((W, H), RESAMPLE)

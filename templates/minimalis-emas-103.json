@@ -1,0 +1,16 @@
+{
+ "judul": [
+  0.1,
+  0.845,
+  0.9,
+  0.935
+ ],
+ "garis": true,
+ "tanggal": false,
+ "billing": false,
+ "studio": false,
+ "aksen": "#F2C14E",
+ "warna": "#141414",
+ "keluarga": "Minimalis",
+ "palet": "Emas"
+}
