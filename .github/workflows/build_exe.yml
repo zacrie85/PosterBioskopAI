@@ -233,7 +233,7 @@ jobs:
           test -n "$rel_id"
           echo "Release ID: $rel_id"
 
-          body="PosterBioskopAI v2.0.4 — pembuat poster film dengan AI generatif yang berjalan 100% offline (Stable Diffusion Turbo, ONNX).
+          body="PosterBioskopAI v2.0.5 — pembuat poster film dengan AI generatif yang berjalan 100% offline (Stable Diffusion Turbo, ONNX).
 
           ## Paket unduhan
           - **PosterBioskopAI-Windows.zip** — aplikasi utama (Windows 10/11 64-bit); ekstrak dulu, di dalamnya ada PosterBioskopAI.exe
@@ -246,6 +246,10 @@ jobs:
           2. Unduh kedua bagian model + GABUNG-MODEL.bat, taruh DI DALAM folder PosterBioskopAI (di samping PosterBioskopAI.exe).
           3. Double-click GABUNG-MODEL.bat — model terpasang di models\\sd-turbo-onnx di dalam folder aplikasi.
           4. Double-click PosterBioskopAI.exe — status Model AI: SIAP, tanpa internet.
+
+          ## Baru di v2.0.5 (perbaikan kualitas AI yang sesungguhnya)
+          - Bug penting: preset kualitas lama dengan strength di bawah 1.0 ternyata melompati SEMUA langkah UNet — hasilnya hanya round-trip VAE (frame yang dihaluskan), bukan gambar AI.
+          - Kini semua preset benar-benar menggambar dengan UNet: Cepat = 1 langkah, Normal = 2, Tinggi = 3, Maksimal = 4 (gambar ulang penuh ala SD-Turbo), pengaman minimal 1 langkah, jumlah langkah selalu persis sesuai label.
 
           ## Baru di v2.0.4 (perbaikan InvalidArgument saat AI menggambar)
           - Feed model AI dikonversi otomatis ke tipe yang dideklarasikan sesi ONNX (float/fp16/int64/int32).

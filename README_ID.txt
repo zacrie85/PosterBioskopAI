@@ -3,6 +3,15 @@
 Aplikasi desktop Windows pembuat poster film ala Hollywood dari video/foto
 kamu — kini dengan **mesin AI generatif sungguhan yang berjalan 100% offline**.
 
+## Yang baru di v2.0.5 (perbaikan kualitas AI yang sesungguhnya)
+
+* Bug penting: preset kualitas lama (strength < 1.0) ternyata **melompati
+  SEMUA langkah UNet** — hasilnya hanya round-trip VAE (frame video yang
+  dihaluskan), bukan gambar AI! Kini SEMUA preset benar-benar menggambar
+  dengan UNet: Cepat = 1 langkah, Normal = 2, Tinggi = 3, Maksimal = 4
+  (gambar ulang penuh ala SD-Turbo), dengan pengaman minimal 1 langkah.
+* Hasil poster kini benar-benar key art hasil AI sesuai prompt.
+
 ## Yang baru di v2.0.4 (perbaikan InvalidArgument saat AI menggambar)
 
 * Setiap feed model AI kini dikonversi otomatis ke tipe yang diDEKLARASIKAN

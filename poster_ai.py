@@ -219,10 +219,16 @@ def rasio_label_to_key(label):
 # ---------------------------------------------------------------------------
 # Preset kualitas AI = jumlah langkah UNet yang benar-benar dijalankan
 # ---------------------------------------------------------------------------
+# Preset kualitas AI = jumlah langkah UNet yang benar-benar dijalankan.
+# Semua preset memakai strength 1.0 (gambar ulang penuh ala SD-Turbo, yang
+# memang dirancang untuk 1-4 langkah): angka pertama = jumlah langkah, dan
+# dengan strength 1.0 seluruh jadwal dipakai sehingga UNet SELALU ikut
+# menggambar. (Dulu ada preset dengan strength < 1.0 yang justru melompati
+# SEMUA langkah — hasilnya bukan AI, hanya round-trip VAE yang deterministik.)
 QUALITY_PRESETS = {
-    "Cepat (1 langkah)": (1, 0.85),
-    "Normal (2 langkah)": (4, 0.55),
-    "Tinggi (3 langkah)": (4, 0.80),
+    "Cepat (1 langkah)": (1, 1.00),
+    "Normal (2 langkah)": (2, 1.00),
+    "Tinggi (3 langkah)": (3, 1.00),
     "Maksimal (4 langkah)": (4, 1.00),
 }
 
@@ -600,9 +606,9 @@ class PosterAI:
         n_steps, strength = QUALITY_PRESETS.get(quality_key, QUALITY_PRESETS["Normal (2 langkah)"])
 
         # jadwal langkah + pemangkasan sesuai strength (ala diffusers img2img)
-        timesteps = np.arange(1000, 0, -(1000 // n_steps)) - 1        # trailing
+        timesteps = np.linspace(1000, 1, n_steps).round().astype(np.int64) - 1
         sigmas = np.append(self._sigmas[timesteps], 0.0)
-        init_ts = min(int(n_steps * strength), n_steps)
+        init_ts = max(1, min(int(n_steps * strength), n_steps))
         t_start = max(n_steps - init_ts, 0)
         ts_used, sg_used = timesteps[t_start:], sigmas[t_start:]
 

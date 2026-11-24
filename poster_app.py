@@ -2,6 +2,11 @@
 """
 PosterBioskopAI — aplikasi desktop OFFLINE pembuat poster film ala Hollywood.
 
+Versi 2.0.5 — perbaikan kualitas AI yang sesungguhnya: preset kualitas lama
+  dengan strength < 1.0 ternyata melompati SEMUA langkah UNet (hasilnya hanya
+  round-trip VAE, bukan AI!). Kini semua preset menjalankan UNet sesuai
+  labelnya (1-4 langkah gambar ulang penuh ala SD-Turbo) + pengaman minimal
+  1 langkah dan jumlah langkah selalu persis = label.
 Versi 2.0.4 — perbaikan InvalidArgument saat AI menggambar: feed dikonversi
   otomatis ke tipe yang dideklarasikan sesi ONNX, dan bila kernel ORT di CPU
   tertentu tetap menuntut tipe lain, pesan galat diparse lalu dicoba ulang
