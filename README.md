@@ -22,6 +22,30 @@ desain — tanpa internet, tanpa API key.
    **margin aman: teks dijamin tidak melewati batas kiri/kanan**. Rasio:
    **9:16 (Story/Reels/TikTok)** · **16:9 (Layar)** · atau ikuti rasio video.
 
+## Memilih template — 131 desain bawaan
+
+Di panel **Template** ada empat cara; semua instan dan tanpa perlu paham desain:
+
+1. **🎨 Galeri visual (paling mudah)** — klik tombol 🎨 di samping dropdown:
+   seluruh 131 template tampil sebagai pratinjau poster kecil, **klik satu
+   gambar** dan langsung terpasang di aplikasi.
+2. **Dropdown** — pilih langsung; pola nama berkas = `keluarga-palet-nomor`
+   (mis. `festival-senja-039` = keluarga *Festival*, palet *Senja*).
+3. **Katalog gambar** — buka `templates\_katalog-template.jpg` untuk melihat
+   semua desain sekaligus, bahkan tanpa menjalankan aplikasi.
+4. **PNG/JPG milikmu** — taruh di folder `templates\` (tombol 📁 membukanya
+   lalu klik 📁 sekali lagi untuk menyegarkan); PNG transparan disusun di atas
+   key art, JPEG dipakai sebagai latar. **Tanpa template** = komposisi bawaan
+   mesin tipografi.
+
+Keluarga layout: Klasik · Judul Atas · Letterbox · Panel Samping · Festival ·
+Komedi · Minimalis · Gradien Penuh · Duotone · Bingkai · Badge · Kolom Tiga ·
+Vignette · Sisi Gelap · Skrim Puncak. Palet: Emas · Crimson · Orka · Ungu ·
+Biru · Senja · Rimba · Mono · Pop · Perak. Tips cepat: drama/kisah nyata →
+*Festival* atau *Klasik*; aksi/horor → *Sisi Gelap*, *Duotone*, *Skrim
+Puncak*; komedi/seru → *Komedi* + palet *Pop*; dokumenter bersih →
+*Minimalis* atau *Letterbox*.
+
 ## Instalasi (Windows)
 
 1. Buka [Releases](https://github.com/zacrie85/PosterBioskopAI/releases) → dari
@@ -48,6 +72,7 @@ Ingin build EXE sendiri? Jalankan `build_windows.bat`.
   ```
   python batch_poster.py "D:\video-kegiatan" --rasio "9:16" --kualitas "Cepat (1 langkah)"
   python batch_poster.py folder --prompt "poster malam kabut neon biru"
+  python batch_poster.py folder --template festival-senja-039
   ```
 
 ## Struktur proyek
@@ -59,6 +84,9 @@ Ingin build EXE sendiri? Jalankan `build_windows.bat`.
 | `poster_ai.py` | Mesin AI generatif: SD-Turbo ONNX (pipeline, unduh model, penerjemah prompt) |
 | `poster_engine.py` | Tipografi & komposisi poster (margin aman) |
 | `frame_picker.py` | Ekstraksi frame terbaik + judul dari nama video |
+| `template_engine.py` | Pasang template layout/palet di atas key art |
+| `template_gallery.py` | Galeri 🎨 pemilih template + pembuat katalog |
+| `templates/` | 131 template bawaan (PNG+JSON) + katalog & cache pratinjau |
 | `build_windows.bat` | Build EXE (PyInstaller) |
 | `.github/workflows/` | Build EXE otomatis di runner Windows GitHub |
 | `contoh/` | Video uji |

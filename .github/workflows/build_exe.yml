@@ -34,7 +34,7 @@ jobs:
       - name: Build EXE (PyInstaller ONEDIR, font ikut dikemas)
         run: |
           python make_icon.py
-          pyinstaller --noconfirm --onedir --windowed --name PosterBioskopAI --icon=icon.ico --add-data "assets;assets" --collect-all onnxruntime poster_app.py
+          pyinstaller --noconfirm --onedir --windowed --name PosterBioskopAI --icon=icon.ico --add-data "assets;assets" --add-data "templates;templates" --collect-all onnxruntime poster_app.py
 
       - name: Uji mesin AI di Windows asli (OrtProbe — titik crash pengguna)
         run: |

@@ -67,6 +67,7 @@ import poster_ai as ai
 import poster_engine as eng
 import frame_picker as fp
 import template_engine as te
+import template_gallery as tg
 
 BG = "#141420"
 PANEL = "#1c1c2a"
@@ -285,9 +286,13 @@ class PosterApp(tk.Tk):
         self.cmb_template.pack(side="left", padx=6, fill="x", expand=True)
         ttk.Button(rowt, text="📁", width=3,
                    command=self.buka_folder_template).pack(side="left")
-        ttk.Label(f4, text="131 template bawaan + PNG/JPG milikmu: taruh di "
-                           "folder templates\\ lalu klik 📁 (PNG transparan "
-                           "= di atas art, JPEG = latar).",
+        ttk.Button(rowt, text="🎨", width=3,
+                   command=self.buka_galeri_template).pack(side="left",
+                                                           padx=(6, 0))
+        ttk.Label(f4, text="🎨 = pilih visual dari 131 template (klik "
+                           "pratinjaunya). PNG/JPG milikmu: taruh di folder "
+                           "templates\\ lalu klik 📁 (PNG transparan = di "
+                           "atas art, JPEG = latar).",
                   style="Dim.TLabel", wraplength=350, justify="left").pack(
                       anchor="w", pady=(3, 0))
         rowv = ttk.Frame(f4)
@@ -439,6 +444,10 @@ class PosterApp(tk.Tk):
     def _refresh_template_values(self):
         self.cmb_template["values"] = (["Tanpa template"]
                                        + [t["nama"] for t in te.list_templates()])
+
+    def buka_galeri_template(self):
+        tg.tampilkan_galeri(self, self.var_template, self.var_status)
+        self._refresh_template_values()
 
     def buka_folder_template(self):
         d = te.folder_templates()
