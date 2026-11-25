@@ -98,7 +98,8 @@ def _warna(hexstr, fallback):
 
 def compose(art, title, template_path, size=(1080, 1920), tagline="",
             pemain="", sutradara="", release="SEGERA DI BIOSKOP",
-            studio="POSTER BIOSKOP PICTURES"):
+            studio="POSTER BIOSKOP PICTURES",
+            gaya_judul="Otomatis (menyesuaikan judul)"):
     """Key art AI + template + tipografi sesuai zona template.
     Return PIL RGB image berukuran `size`."""
     W, H = size
@@ -135,27 +136,12 @@ def compose(art, title, template_path, size=(1080, 1920), tagline="",
 
     judul = (title or "").strip().upper() or "TANPA JUDUL"
     box_h = y1 - y0
-    f_title, lines, tsize, lh = eng.fit_title(
-        judul, "display", max_w, box_h,
-        min(int(box_h * 0.62), int(H * 0.16)), max_lines=4)
-    y_top = y1 - lh * len(lines)             # rata bawah di dalam kotak
-
-    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    ds = ImageDraw.Draw(sh)
-    yy = y_top
-    for ln in lines:
-        ds.text((cx - eng.text_w(f_title, ln) / 2 + max(2, tsize * 0.05),
-                 yy + max(3, tsize * 0.06)), ln, font=f_title, fill=(0, 0, 0, 200))
-        yy += lh
-    sh = sh.filter(ImageFilter.GaussianBlur(max(2, int(tsize * 0.03))))
-    img = Image.alpha_composite(img.convert("RGBA"), sh).convert("RGB")
-
-    yy = y_top
-    for ln in lines:
-        d.text((cx - eng.text_w(f_title, ln) / 2, yy), ln, font=f_title,
-               fill=(*warna, 255))
-        yy += lh
-    t_end = yy
+    sus = eng.susun_judul(judul, max_w, box_h,
+                          min(int(box_h * 0.62), int(H * 0.16)),
+                          gaya=gaya_judul, max_lines=4)
+    y_top = int(y1 - sus["tinggi"])          # rata bawah di dalam kotak
+    img, t_end = eng.gambar_judul(img, sus, cx, y_top, (*warna, 255),
+                                  (*aksen, 255))
 
     if cfg.get("garis", True):
         ry = int(min(t_end + H * 0.010, y1 + int(H * 0.02)))

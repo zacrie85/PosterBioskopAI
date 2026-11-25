@@ -55,7 +55,8 @@ def _unique_name(judul, used):
 
 
 def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None,
-                template=None):
+                template=None, rilis="SEGERA DI BIOSKOP",
+                gaya_judul="Otomatis (menyesuaikan judul)"):
     """Proses satu file: frame -> AI -> poster tipografi. Return dict ringkasan."""
     t0 = time.time()
     is_vid = fp.is_video(path)
@@ -80,7 +81,8 @@ def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None,
         engine = ai.PosterAI(keep_loaded=True)
         process_one._engine = engine                  # sesi model dipakai ulang
     art = engine.generate(img, prompt, canvas, quality_key=kualitas, progress=prog)
-    poster = eng.compose_poster(art, judul, size=full, template=template)
+    poster = eng.compose_poster(art, judul, size=full, template=template,
+                                release=rilis, gaya_judul=gaya_judul)
     out_path = os.path.join(out_dir, _unique_name(judul, used) + ".png")
     poster.save(out_path, quality=92)
     return {
@@ -98,7 +100,8 @@ def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None,
 def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
               kualitas="Foto asli + sentuhan AI (paling setia)", log=None,
                 progress=None,
-              should_continue=None, template=None):
+              should_continue=None, template=None,
+              rilis="SEGERA DI BIOSKOP", gaya_judul="Otomatis (menyesuaikan judul)"):
     """Proses SEMUA video/foto di folder dengan SATU prompt AI yang sama.
 
     log(msg)               -> pesan kemajuan (mis. untuk Text di GUI / print)
@@ -139,6 +142,7 @@ def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
     prompt_pendek = (prompt[:60] + "…") if len(prompt) > 60 else prompt
     log(f"Batch AI dimulai: {n} file → folder hasil: {out_dir}")
     log(f"Rasio: {ratio_key} · Kualitas: {kualitas}")
+    log(f"Gaya judul: {gaya_judul} · Strip bawah: {rilis if rilis else '(dihapus)'}")
     if template_path:
         log(f"Template: {os.path.basename(template_path)}")
     log(f"Prompt untuk SEMUA file: {prompt_pendek}")
@@ -154,7 +158,8 @@ def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
         log(f"[{i + 1}/{n}] {name} …")
         try:
             r = process_one(path, out_dir, ratio_key, prompt, kualitas, used,
-                            log=log, template=template_path)
+                            log=log, template=template_path, rilis=rilis,
+                            gaya_judul=gaya_judul)
             hasil.append(r)
             done += 1
             sumber = f"detik {r['detik']} dari video" if r["video"] else "foto"
@@ -198,6 +203,11 @@ def main():
     ap.add_argument("--kualitas",
                         default="Foto asli + sentuhan AI (paling setia)",
                     choices=list(ai.QUALITY_PRESETS.keys()))
+    ap.add_argument("--rilis", default="SEGERA DI BIOSKOP",
+                    help="teks strip di bawah judul; kosongkan ('') untuk "
+                         "menghapus strip")
+    ap.add_argument("--gaya-judul", default="Otomatis (menyesuaikan judul)",
+                    choices=list(eng.GAYA_JUDUL))
     ap.add_argument("--template", default="Tanpa",
                     help="nama template di folder templates/ (mis. 'klasik-emas-063') "
                          "atau path file PNG/JPG; 'Tanpa' = tipografi bawaan")
@@ -205,7 +215,7 @@ def main():
 
     try:
         res = run_batch(a.folder, a.out, a.rasio, a.prompt, a.kualitas, log=print,
-                        template=a.template)
+                        template=a.template, rilis=a.rilis, gaya_judul=a.gaya_judul)
     except (ValueError, RuntimeError) as exc:
         # pesan ramah (folder kosong, model belum lengkap, mesin AI gagal) —
         # bukan traceback mentah

@@ -202,6 +202,8 @@ class PosterApp(tk.Tk):
         self.var_tagline = tk.StringVar()
         self.var_pemain = tk.StringVar()
         self.var_sutradara = tk.StringVar()
+        self.var_rilis = tk.StringVar(value="SEGERA DI BIOSKOP")
+        self.var_gaya_judul = tk.StringVar(value=eng.GAYA_JUDUL[0])
         self.var_rasio = tk.StringVar(value=ai.RASIOS[0])
         self.var_batch_rasio = tk.StringVar(value=ai.RASIOS[0])
         self.var_kualitas = tk.StringVar(value="Foto asli + sentuhan AI (paling setia)")
@@ -259,11 +261,24 @@ class PosterApp(tk.Tk):
                 ("Judul film", self.var_judul, "dari video: diisi otomatis"),
                 ("Tagline (opsional)", self.var_tagline, "kalimat promosi di atas judul"),
                 ("Pemain (pisah koma)", self.var_pemain, "opsional"),
-                ("Sutradara (opsional)", self.var_sutradara, "opsional")):
+                ("Sutradara (opsional)", self.var_sutradara, "opsional"),
+                ("Teks di bawah judul", self.var_rilis,
+                 "mis. SEGERA DI BIOSKOP \u00b7 kosongkan untuk menghapus")):
             ttk.Label(f3, text=label, style="Panel.TLabel").pack(anchor="w", pady=(3, 0))
             ttk.Entry(f3, textvariable=var).pack(fill="x")
             if hint:
                 ttk.Label(f3, text=hint, style="Dim.TLabel").pack(anchor="w")
+
+        rowg = ttk.Frame(f3)
+        rowg.pack(fill="x", pady=(6, 0))
+        ttk.Label(rowg, text="Gaya judul:", style="Panel.TLabel").pack(side="left")
+        ttk.Combobox(rowg, textvariable=self.var_gaya_judul, state="readonly",
+                     values=list(eng.GAYA_JUDUL), width=30).pack(side="left", padx=6)
+        ttk.Label(f3, text="Gaya judul mengatur variasi huruf: besar-kecil "
+                           "menyesuaikan panjang judul, kata akhir bisa miring "
+                           "berwarna aksen — semacam poster sungguhan.",
+                  style="Dim.TLabel", wraplength=350, justify="left").pack(
+                      anchor="w", pady=(2, 0))
 
         # ---------------- format & AI ----------------
         f4 = ttk.Labelframe(left, text=" 4. FORMAT & MESIN AI ", padding=8)
@@ -295,6 +310,13 @@ class PosterApp(tk.Tk):
                            "atas art, JPEG = latar).",
                   style="Dim.TLabel", wraplength=350, justify="left").pack(
                       anchor="w", pady=(3, 0))
+        self.lbl_tmpl = ttk.Label(f4, text="(pratinjau template muncul di sini)",
+                                  anchor="center", style="Dim.TLabel")
+        self.lbl_tmpl.pack(anchor="center", pady=(6, 0))
+        self._tmpl_photo = None
+        self._tmpl_cache = {}
+        self.var_template.trace_add("write", lambda *_: self.perbarui_pratinjau_template())
+        self.perbarui_pratinjau_template()
         rowv = ttk.Frame(f4)
         rowv.pack(fill="x", pady=(5, 0))
         ttk.Button(rowv, text="🎲 Variasi Baru (acak AI)",
@@ -449,6 +471,24 @@ class PosterApp(tk.Tk):
         tg.tampilkan_galeri(self, self.var_template, self.var_status)
         self._refresh_template_values()
 
+    def perbarui_pratinjau_template(self):
+        """Tampilkan thumbnail kecil template yang sedang dipilih."""
+        nama = self.var_template.get()
+        if not nama or nama.lower().startswith("tanpa"):
+            self.lbl_tmpl.configure(image="", text="(tanpa template)")
+            self._tmpl_photo = None
+            return
+        try:
+            ph = self._tmpl_cache.get(nama)
+            if ph is None:
+                im = tg.render_thumbnail(nama, size=(146, 260))
+                ph = ImageTk.PhotoImage(im)
+                self._tmpl_cache[nama] = ph
+            self._tmpl_photo = ph
+            self.lbl_tmpl.configure(image=ph, text="")
+        except Exception:                                      # noqa: BLE001
+            self.lbl_tmpl.configure(image="", text="(pratinjau tidak tersedia)")
+
     def buka_folder_template(self):
         d = te.folder_templates()
         os.makedirs(d, exist_ok=True)
@@ -538,6 +578,7 @@ class PosterApp(tk.Tk):
         prompt = self._prompt_text() or ai.DEFAULT_PROMPT
         judul, tagline, pemain, sutradara = (self.var_judul.get(), self.var_tagline.get(),
                                              self.var_pemain.get(), self.var_sutradara.get())
+        rilis, gaya_judul = self.var_rilis.get().strip(), self.var_gaya_judul.get()
         full = ai.poster_full_size(rasio_key, video_ratio)
         preview = eng.preview_size(full)
 
@@ -550,6 +591,7 @@ class PosterApp(tk.Tk):
                                               quality_key=quality, progress=prog)
                 poster = eng.compose_poster(art, judul, size=full, tagline=tagline,
                                             pemain=pemain, sutradara=sutradara,
+                                            release=rilis, gaya_judul=gaya_judul,
                                             template=template_path)
             except Exception as exc:                       # noqa: BLE001
                 # Catat galat ASLI seketika di thread kerja (traceback utuh ke
@@ -622,6 +664,7 @@ class PosterApp(tk.Tk):
         prompt = self._prompt_text() or ai.DEFAULT_PROMPT
         judul_v, tagline, pemain, sutradara = (self.var_judul.get(), self.var_tagline.get(),
                                                self.var_pemain.get(), self.var_sutradara.get())
+        rilis, gaya_judul = self.var_rilis.get().strip(), self.var_gaya_judul.get()
 
         def work():
             try:
@@ -629,6 +672,7 @@ class PosterApp(tk.Tk):
                                               quality_key=quality)
                 poster = eng.compose_poster(art, judul_v, size=full, tagline=tagline,
                                             pemain=pemain, sutradara=sutradara,
+                                            release=rilis, gaya_judul=gaya_judul,
                                             template=template_path)
                 poster.save(path, quality=92)
                 ok, err, p = True, None, path
@@ -744,6 +788,8 @@ class PosterApp(tk.Tk):
             try:
                 res = bp.run_batch(folder, None, rasio_key, prompt,
                                    kualitas=self.var_kualitas.get(),
+                                   rilis=self.var_rilis.get().strip(),
+                                   gaya_judul=self.var_gaya_judul.get(),
                                    log=log, progress=prog,
                                    should_continue=lambda: not cancel["v"])
             except Exception as exc:                # noqa: BLE001

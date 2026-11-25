@@ -32,9 +32,10 @@ Di panel **Template** ada empat cara; semua instan dan tanpa perlu paham desain:
    gambar** dan langsung terpasang di aplikasi.
 2. **Dropdown** — pilih langsung; pola nama berkas = `keluarga-palet-nomor`
    (mis. `festival-senja-039` = keluarga *Festival*, palet *Senja*).
-3. **Katalog gambar** — buka `templates\_katalog-template.jpg` untuk melihat
+3. **Pratinjau di aplikasi (v2.3.0)** — dropdown Template kini menampilkan KOTAK PRATINJAU kecil di bawahnya; pilih nama → pratinjau langsung berubah, jadi kelihatan bentuknya sebelum dipakai.
+4. **Katalog gambar** — buka `templates\_katalog-template.jpg` untuk melihat
    semua desain sekaligus, bahkan tanpa menjalankan aplikasi.
-4. **PNG/JPG milikmu** — taruh di folder `templates\` (tombol 📁 membukanya
+5. **PNG/JPG milikmu** — taruh di folder `templates\` (tombol 📁 membukanya
    lalu klik 📁 sekali lagi untuk menyegarkan); PNG transparan disusun di atas
    key art, JPEG dipakai sebagai latar. **Tanpa template** = komposisi bawaan
    mesin tipografi.
@@ -68,6 +69,24 @@ ngawur seperti "ERANEAY" di key art) — judul selalu ditulis mesin tipografi.
 UTUH sepanjang apa pun: bila panjang, font otomatis mengecil dan baris
 bertambah (4 baris normal; judul ekstrem → font lebih kecil lagi), sehingga
 semua kata tampil lengkap tanpa tanda "…".
+
+## Strip bisa diganti/dihapus + gaya judul bervariasi — v2.3.0
+
+**Teks "SEGERA DI BIOSKOP"** kini ada kolomnya di aplikasi (bagian 3, "Teks di
+bawah judul"): isi teks apa pun (mis. "TAYANG 25 DESEMBER") atau **kosongkan
+untuk menghapus** strip itu. Mode batch: `--rilis ""`.
+
+**Gaya judul** — dropdown baru di aplikasi (dan `--gaya-judul` di batch):
+
+* **Otomatis (menyesuaikan judul)** — bawaan: judul pendek jadi blok besar,
+  sedang mendapat kata akhir miring berwarna aksen, panjang memakai kontras
+  besar-kecil (kata penting besar, kata sambung "di/yang/dan" kecil).
+* **Klasik (seragam besar)** — gaya lama, satu ukuran.
+* **Menonjol (kata penting besar)** / **Miring (kata akhir aksen)** — pilih
+  manual sesuai selera.
+
+Semua gaya menyejajarkan garis dasar huruf besar-kecil dan tetap **tidak
+pernah memotong teks**: judul sepanjang apa pun tampil utuh.
 
 ## Instalasi (Windows)
 

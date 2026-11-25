@@ -219,11 +219,182 @@ def _tracked_fit(text, font, max_w, base_tracking):
 
 
 # ---------------------------------------------------------------------------
+# Variasi gaya judul: ukuran per kata menyesuaikan panjang judul, seperti
+# poster bioskop sungguhan (kata penting besar, kata sambung kecil, atau
+# kata akhir miring berwarna aksen). SEMUA teks tetap tampil utuh.
+# ---------------------------------------------------------------------------
+_KATA_SAMBUNG = {"DI", "KE", "DARI", "YANG", "DAN", "ATAU", "SI", "PADA",
+                 "DENGAN", "UNTUK", "TANPA", "ADALAH", "DALAM", "OLEH", "BAGI",
+                 "SAAT", "SANG", "THE", "OF", "IN", "A", "AN", "DG", "DGN",
+                 "INI", "ITU", "JUGA", "KETIKA", "SERTA", "TAPI", "PUN"}
+
+GAYA_JUDUL = ("Otomatis (menyesuaikan judul)", "Klasik (seragam besar)",
+              "Menonjol (kata penting besar)", "Miring (kata akhir aksen)")
+
+
+def _pilih_gaya(gaya, n_kata):
+    g = (gaya or "").strip().lower()
+    if g.startswith("klasik"):
+        return "klasik"
+    if g.startswith("menonjol"):
+        return "menonjol"
+    if g.startswith("miring"):
+        return "miring"
+    if n_kata >= 8:                    # judul panjang -> kontras besar/kecil
+        return "menonjol"
+    if n_kata >= 3:                    # sedang -> kata akhir miring aksen
+        return "miring"
+    return "klasik"                    # pendek -> satu blok besar
+
+
+def _baris(segs, gap, ukuran, ekstra=0.0):
+    return {"segs": segs, "gap": gap, "ukuran": ukuran, "ekstra": ekstra}
+
+
+def _susun_seragam(text, max_w, max_h, start, max_lines):
+    """Klasik: satu ukuran untuk semua baris (perilaku lama)."""
+    font, lines, size, lh = fit_title(text, "display", max_w, max_h, start,
+                                      max_lines=max_lines)
+    baris = [_baris([(ln, font, False, False)], 0.0, size) for ln in lines]
+    return {"baris": baris, "tinggi": lh * len(lines), "ukuran_max": size}
+
+
+def _susun_menonjol(text, max_w, max_h, start, max_lines):
+    """Kata penting besar, kata sambung (di/yang/dan...) lebih kecil."""
+    kata = text.split()
+    s = 1.0
+    while True:
+        besar = max(9, int(start * s))
+        kecil = max(8, int(besar * 0.56))
+        fb, fk = get_font("display", besar), get_font("display", kecil)
+        gap = besar * 0.20
+        baris, cur, cur_w = [], [], 0.0
+        for w in kata:
+            penting = w.strip(",.!?;:") not in _KATA_SAMBUNG
+            font = fb if penting else fk
+            lw = font.getlength(w)
+            if cur and cur_w + gap + lw > max_w:
+                baris.append(cur)
+                cur, cur_w = [], 0.0
+            if cur:
+                cur_w += gap
+            cur.append((w, font, False, False))
+            cur_w += lw
+            if w.endswith(","):
+                baris.append(cur)
+                cur, cur_w = [], 0.0
+        if cur:
+            baris.append(cur)
+        tinggi = sum(max(f.size for _, f, _, _ in b) * 1.12 for b in baris)
+        if (tinggi <= max_h and len(baris) <= max_lines + 2) or besar <= 9:
+            baris = [_baris(b, gap, max(f.size for _, f, _, _ in b))
+                     for b in baris]
+            return {"baris": baris, "tinggi": tinggi, "ukuran_max": besar}
+        s *= 0.90
+
+
+def _susun_miring(text, max_w, max_h, start, max_lines):
+    """Seragam, tapi kata terakhir (bukan kata sambung) miring + aksen."""
+    font, lines, size, lh = fit_title(text, "display", max_w, max_h, start,
+                                      max_lines=max_lines)
+    kata_akhir = lines[-1].split()[-1] if lines[-1].split() else ""
+    if (len(lines[-1].split()) >= 2
+            and kata_akhir.strip(",.!?;:") not in _KATA_SAMBUNG):
+        segs = []
+        for wd in lines[-1].split():
+            miring = wd == kata_akhir
+            segs.append((wd, font, miring, miring))
+        baris = [_baris([(ln, font, False, False)], 0.0, size)
+                 for ln in lines[:-1]]
+        baris.append(_baris(segs, font.getlength(" "), size, ekstra=size * 0.12))
+        tinggi = lh * len(lines) + size * 0.12
+    else:
+        baris = [_baris([(ln, font, False, False)], 0.0, size) for ln in lines]
+        tinggi = lh * len(lines)
+    return {"baris": baris, "tinggi": tinggi, "ukuran_max": size}
+
+
+def susun_judul(text, max_w, max_h, start_size,
+                gaya="Otomatis (menyesuaikan judul)", max_lines=4):
+    """Susun judul multi-ukuran sesuai gaya. Return dict:
+      baris      : list baris; tiap baris = dict segs [(teks, font, aksen,
+                   miring)], gap antar kata, ukuran (font terbesar di baris)
+                   dan ekstra tinggi utk kata miring
+      tinggi     : tinggi total blok judul (px)
+      ukuran_max : font terbesar di seluruh judul
+    Semua kata SELALU ikut — tidak ada teks yang dipotong."""
+    mode = _pilih_gaya(gaya, len(text.split()))
+    if mode == "menonjol":
+        return _susun_menonjol(text, max_w, max_h, start_size, max_lines)
+    if mode == "miring":
+        return _susun_miring(text, max_w, max_h, start_size, max_lines)
+    return _susun_seragam(text, max_w, max_h, start_size, max_lines)
+
+
+def _teks_miring(teks, font, warna):
+    """Render satu kata miring -4 derajat ke gambar RGBA transparan."""
+    pad = max(8, int(font.size * 0.35))
+    bbox = font.getbbox(teks)
+    w = int(font.getlength(teks)) + pad * 2
+    h = int(font.size * 1.5) + pad * 2
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    dd = ImageDraw.Draw(im)
+    dd.text((pad - bbox[0], pad - bbox[1]), teks, font=font, fill=warna)
+    return im.rotate(-4, expand=True, resample=Image.BICUBIC)
+
+
+def gambar_judul(img, susunan, cx, y_top, utama=(247, 246, 244, 255),
+                 aksen=(242, 193, 78, 255)):
+    """Gambar hasil susun_judul ke img: bayangan lembut + teks multi-ukuran.
+    Return (img_rgb_baru, y_bawah_blok_judul)."""
+    W, H = img.size
+    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ds, d = ImageDraw.Draw(sh), ImageDraw.Draw(layer)
+    y = int(y_top)
+    uk_max = susunan["ukuran_max"]
+    soff_x, soff_y = max(2, int(uk_max * 0.05)), max(3, int(uk_max * 0.06))
+    for ln in susunan["baris"]:
+        segs, gap = ln["segs"], ln["gap"]
+        lebar = 0.0
+        for i, (teks, font, _, miring) in enumerate(segs):
+            lw = font.getlength(teks)
+            if miring:
+                lw = lw * 1.06 + font.size * 0.14
+            if i:
+                lebar += gap
+            lebar += lw
+        x = cx - lebar / 2.0
+        for teks, font, pk, miring in segs:
+            warna = aksen if pk else utama
+            yb = y + (ln["ukuran"] - font.size)   # sejajarkan garis dasar
+            if miring:
+                im_t = _teks_miring(teks, font, warna)
+                im_s = _teks_miring(teks, font, (0, 0, 0, 210))
+                sh.paste(im_s, (int(x + soff_x), int(yb + soff_y)), im_s)
+                layer.paste(im_t, (int(x), int(yb - int(ln["ekstra"] / 2))), im_t)
+            else:
+                ds.text((x + soff_x, yb + soff_y), teks, font=font,
+                        fill=(0, 0, 0, 220))
+                d.text((x, yb), teks, font=font, fill=warna)
+            lw = font.getlength(teks)
+            if miring:
+                lw = lw * 1.06 + font.size * 0.14
+            x += lw + gap
+        y += ln["ukuran"] * 1.12 + ln["ekstra"]
+    sh = sh.filter(ImageFilter.GaussianBlur(max(2, int(uk_max * 0.03))))
+    img = Image.alpha_composite(img.convert("RGBA"), sh)
+    img = Image.alpha_composite(img, layer)
+    return img.convert("RGB"), y
+
+
+# ---------------------------------------------------------------------------
 # Komposisi akhir: key art AI + teks
 # ---------------------------------------------------------------------------
 def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
                    sutradara="", studio="POSTER BIOSKOP PICTURES",
-                   release="SEGERA DI BIOSKOP", seed=7, template=None):
+                   release="SEGERA DI BIOSKOP", seed=7, template=None,
+                   gaya_judul="Otomatis (menyesuaikan judul)"):
     """Susun poster final: key art AI + tipografi dengan margin aman.
     Kalau `template` diisi (path file di folder templates/ atau path
     langsung), susunan visual mengikuti template itu (template_engine).
@@ -233,7 +404,7 @@ def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
         return template_engine.compose(art, title, template, size=size,
                                        tagline=tagline, pemain=pemain,
                                        sutradara=sutradara, release=release,
-                                       studio=studio)
+                                       studio=studio, gaya_judul=gaya_judul)
     W, H = size
     art = ImageOps.exif_transpose(art).convert("RGB")
     art = cover_crop(art, W / H, focus=0.45).resize((W, H), RESAMPLE)
@@ -263,33 +434,15 @@ def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
             draw_tracked(d, cx, int(H * 0.045), names, f_cast, (245, 245, 245, 230),
                          tracking=tr, shadow=(1, 1, (0, 0, 0, 170)))
 
-    # --- judul: auto-fit, 1-3 baris, dijamin <= max_w ---
+    # --- judul: variasi gaya + auto-fit, SEMUA teks selalu tampil ---
     title_text = (title or "").strip().upper() or "TANPA JUDUL"
     start = int(H * (0.155 if landscape else 0.135))
     max_h_title = H * (0.30 if landscape else 0.27)
-    f_title, lines, tsize, lh = fit_title(title_text, "display", max_w, max_h_title,
-                                          start, max_lines=4)
+    sus = susun_judul(title_text, max_w, max_h_title, start,
+                      gaya=gaya_judul, max_lines=4)
     bottom_anchor = H * (0.90 if not sutradara and not release else 0.885)
-    y_top = bottom_anchor - lh * len(lines)
-
-    # bayangan lembut judul
-    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    ds = ImageDraw.Draw(sh)
-    yy = y_top
-    for ln in lines:
-        ds.text((cx - text_w(f_title, ln) / 2 + max(2, tsize * 0.05),
-                 yy + max(3, tsize * 0.06)), ln, font=f_title, fill=(0, 0, 0, 220))
-        yy += lh
-    sh = sh.filter(ImageFilter.GaussianBlur(max(2, int(tsize * 0.03))))
-    img = Image.alpha_composite(img.convert("RGBA"), sh).convert("RGB")
-
-    # judul itu sendiri
-    yy = y_top
-    for ln in lines:
-        d.text((cx - text_w(f_title, ln) / 2, yy), ln, font=f_title,
-               fill=(247, 246, 244, 255))
-        yy += lh
-    t_end = yy
+    y_top = int(bottom_anchor - sus["tinggi"])
+    img, t_end = gambar_judul(img, sus, cx, y_top)
 
     # garis aksen emas di bawah judul (selalu di dalam margin)
     ry = int(min(t_end + H * 0.012, H * 0.915))
