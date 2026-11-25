@@ -12,7 +12,7 @@ Dipakai dua cara:
   1. Dari GUI     : tombol MODE BATCH di aplikasi (poster_app.py).
   2. Dari terminal: python batch_poster.py <folder> [--out DIR]
                     [--rasio "9:16"] [--prompt "teks prompt"]
-                    [--kualitas "Normal (2 langkah)"]
+                    [--kualitas "Foto asli + sentuhan AI (paling setia)"]
 """
 
 import argparse
@@ -96,7 +96,8 @@ def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None,
 
 
 def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
-              kualitas="Normal (2 langkah)", log=None, progress=None,
+              kualitas="Foto asli + sentuhan AI (paling setia)", log=None,
+                progress=None,
               should_continue=None, template=None):
     """Proses SEMUA video/foto di folder dengan SATU prompt AI yang sama.
 
@@ -194,7 +195,8 @@ def main():
                     choices=["Ikuti rasio video", "9:16", "16:9"])
     ap.add_argument("--prompt", default=None,
                     help="prompt AI untuk SEMUA file (bawaan: prompt sinematik Hollywood)")
-    ap.add_argument("--kualitas", default="Normal (2 langkah)",
+    ap.add_argument("--kualitas",
+                        default="Foto asli + sentuhan AI (paling setia)",
                     choices=list(ai.QUALITY_PRESETS.keys()))
     ap.add_argument("--template", default="Tanpa",
                     help="nama template di folder templates/ (mis. 'klasik-emas-063') "

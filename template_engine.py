@@ -137,7 +137,7 @@ def compose(art, title, template_path, size=(1080, 1920), tagline="",
     box_h = y1 - y0
     f_title, lines, tsize, lh = eng.fit_title(
         judul, "display", max_w, box_h,
-        min(int(box_h * 0.62), int(H * 0.16)), max_lines=3)
+        min(int(box_h * 0.62), int(H * 0.16)), max_lines=4)
     y_top = y1 - lh * len(lines)             # rata bawah di dalam kotak
 
     sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))

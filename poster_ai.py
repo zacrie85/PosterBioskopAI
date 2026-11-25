@@ -43,6 +43,19 @@ _BASE_STYLE = ("cinematic hollywood movie poster key art, modern design, "
                "dramatic lighting, bold composition, rich color grading, "
                "highly detailed, sharp focus")
 
+# Pelengkap anti teks palsu: AI gambar-gambar huruf ngawur ("ERANEAY", dst)
+# kalau tidak dilarang. Judul sebenarnya ditulis mesin tipografi, bukan AI.
+_TANPA_TEKS = (", no text, no letters, no words, no captions, "
+               "no watermark, no logo")
+
+# Suffix gaya per mode: setia menjaga foto asli, sinematik bebas bergaya.
+_GAYA_PROMPT = {
+    "setia": ("photorealistic, preserve the original photograph, keep real "
+              "faces and real details, natural lighting, subtle color grading, "
+              "no illustration, no cartoon, no drawing" + _TANPA_TEKS),
+    "sinematik": _BASE_STYLE + _TANPA_TEKS,
+}
+
 # ---------------------------------------------------------------------------
 # Kamus prompt Indonesia -> Inggris: besar (~590 entri) di kamus_prompt.py,
 # frasa 2-4 kata dipadankan lebih dulu. Alias di bawah untuk kompatibilitas.
@@ -184,31 +197,37 @@ def rasio_label_to_key(label):
 # ---------------------------------------------------------------------------
 # Preset kualitas AI = jumlah langkah UNet yang benar-benar dijalankan
 # ---------------------------------------------------------------------------
-# Preset kualitas AI = jumlah langkah UNet yang benar-benar dijalankan.
-# Semua preset memakai strength 1.0 (gambar ulang penuh ala SD-Turbo, yang
-# memang dirancang untuk 1-4 langkah): angka pertama = jumlah langkah, dan
-# dengan strength 1.0 seluruh jadwal dipakai sehingga UNet SELALU ikut
-# menggambar. (Dulu ada preset dengan strength < 1.0 yang justru melompati
-# SEMUA langkah — hasilnya bukan AI, hanya round-trip VAE yang deterministik.)
+# Preset kualitas AI = (jumlah langkah jadwal, strength, gaya prompt).
+# - Mode "setia": hanya LANGKAH TERAKHIR yang dijalankan mulai dari sigma kecil,
+#   jadi foto asli tetap terbaca (wajah, tekstur, warna) — hanya dipoles AI.
+#   Kalibrasi jadwal sigma: n=4 strength 0.50 mulai di t=333 (sigma 0,93),
+#   n=6 strength 0.60 mulai di t=599 (sigma 2,28).
+# - Mode "sinematik": strength 1.0 = gambar ulang penuh ala SD-Turbo (hasil
+#   bisa terasa CGI/kartun). Inilah perilaku lama.
+# Guard penting (bug lama): jumlah langkah yang dijalankan SELALU >= 1 —
+# dulu int(n*strength) bisa 0 sehingga UNet terlewat total (round-trip VAE).
 QUALITY_PRESETS = {
-    "Cepat (1 langkah)": (1, 1.00),
-    "Normal (2 langkah)": (2, 1.00),
-    "Tinggi (3 langkah)": (3, 1.00),
-    "Maksimal (4 langkah)": (4, 1.00),
+    "Foto asli + sentuhan AI (paling setia)": (4, 0.50, "setia"),
+    "Fotorealistik sinematik (seimbang)": (6, 0.60, "setia"),
+    "Cepat (1 langkah)": (1, 1.00, "sinematik"),
+    "Normal (2 langkah)": (2, 1.00, "sinematik"),
+    "Tinggi (3 langkah)": (3, 1.00, "sinematik"),
+    "Maksimal (4 langkah)": (4, 1.00, "sinematik"),
 }
 
 
 # ---------------------------------------------------------------------------
 # Prompt Indonesia -> Inggris
 # ---------------------------------------------------------------------------
-def build_style_prompt(user_prompt):
+def build_style_prompt(user_prompt, gaya="sinematik"):
     """Terjemahkan prompt pengguna ke kata kunci gaya Inggris yang dipahami AI
     (kamus besar ~590 entri di kamus_prompt.py; frasa 2-4 kata dipadankan
-    dulu, kata sambung dibuang). Tulisan JUDUL di poster diurus mesin
-    tipografi, bukan AI."""
+    dulu, kata sambung dibuang). Suffix gaya mengikuti preset: "setia"
+    menjaga foto asli tetap nyata, "sinematik" bebas bergaya Hollywood.
+    Tulisan JUDUL di poster diurus mesin tipografi, bukan AI."""
     text = (user_prompt or "").strip() or DEFAULT_PROMPT
     terms = kamus_prompt.terjemah_prompt(text)[:14]
-    return _BASE_STYLE + ", " + ", ".join(terms)
+    return _GAYA_PROMPT.get(gaya, _GAYA_PROMPT["sinematik"]) + ", " + ", ".join(terms)
 
 
 # ---------------------------------------------------------------------------
@@ -554,16 +573,20 @@ class PosterAI:
         """
         assert self.ready(), "Model AI belum terunduh lengkap."
         w, h = size
-        n_steps, strength = QUALITY_PRESETS.get(quality_key, QUALITY_PRESETS["Normal (2 langkah)"])
+        preset = QUALITY_PRESETS.get(quality_key)
+        if preset is None:                    # nama tak dikenal -> preset setia
+            preset = QUALITY_PRESETS["Foto asli + sentuhan AI (paling setia)"]
+        n_steps, strength, gaya = preset
 
         # jadwal langkah + pemangkasan sesuai strength (ala diffusers img2img)
         timesteps = np.linspace(1000, 1, n_steps).round().astype(np.int64) - 1
         sigmas = np.append(self._sigmas[timesteps], 0.0)
-        init_ts = max(1, min(int(n_steps * strength), n_steps))
+        init_ts = max(1, min(int(round(n_steps * strength)), n_steps))
         t_start = max(n_steps - init_ts, 0)
         ts_used, sg_used = timesteps[t_start:], sigmas[t_start:]
+        assert len(ts_used) >= 1, "jadwal langkah kosong (strength terlalu kecil)"
 
-        cond = self._encode_text(build_style_prompt(prompt_text))
+        cond = self._encode_text(build_style_prompt(prompt_text, gaya))
         if progress:
             progress("encode", "AI menganalisis frame video…")
         if not self.keep_loaded:

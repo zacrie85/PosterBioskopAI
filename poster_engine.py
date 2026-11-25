@@ -124,9 +124,12 @@ def text_w(font, text, tracking=0):
     return font.getlength(text) + tracking * max(0, len(text) - 1)
 
 
-def _wrap_lines(text, font, max_w, max_lines):
+def _wrap_lines(text, font, max_w, max_lines=None):
     """Pecah teks jadi baris-baris; setiap baris dijamin <= max_w.
-    Kata lebih panjang dari max_w (kasus ekstrem) dipotong dengan tanda -."""
+    TIDAK ADA teks yang dibuang: kata lebih panjang dari max_w (kasus
+    ekstrem, nama tanpa spasi) dipecah menjadi beberapa baris, dan jumlah
+    baris tidak pernah dipangkas dengan tanda '…'. fit_title yang menjaga
+    tinggi total dengan mengecilkan font."""
     words = text.split()
     lines, cur = [], ""
     for wd in words:
@@ -138,31 +141,53 @@ def _wrap_lines(text, font, max_w, max_lines):
             cur = wd
     if cur:
         lines.append(cur)
-    if len(lines) > max_lines:                       # terlalu banyak baris
-        lines = lines[:max_lines]
-        lines[-1] = lines[-1].rstrip(" -") + "…"
-    # kata tunggal raksasa -> potong karakter per karakter agar tetap <= max_w
+    # kata tunggal raksasa -> pecah per potongan karakter ke baris berikut
     fixed = []
     for ln in lines:
-        while font.getlength(ln) > max_w and len(ln) > 4:
-            ln = ln[:-2].rstrip(" -") + "…"
-        fixed.append(ln)
+        while font.getlength(ln) > max_w and len(ln) > 1:
+            potong = len(ln)
+            while potong > 1 and font.getlength(ln[:potong]) > max_w:
+                potong -= 1
+            fixed.append(ln[:potong])
+            ln = ln[potong:]
+        if ln:
+            fixed.append(ln)
     return fixed
 
 
 def fit_title(text, role, max_w, max_h, start_size, min_size=18, max_lines=3):
-    """Cari ukuran font terbesar agar JUDUL muat dalam max_w x max_h
-    dengan <= max_lines baris. Ini yang menjamin tulisan tidak melewati batas."""
+    """Cari ukuran font terbesar agar JUDUL muat dalam max_w x max_h.
+    Ini menjamin tulisan tidak melewati batas KIRI/KANAN/BLOK judul, dan
+    SEMUA teks SELALU tampil: judul tidak pernah dipotong '…'. Kalau dengan
+    <= max_lines baris tidak muat, pencarian menerus ke font lebih kecil
+    dengan baris lebih banyak (fase 2), lalu pengaman font paling kecil."""
+    # fase 1: font besar, baris sedikit (estetika poster biasa)
     size = int(start_size)
     while size >= min_size:
         font = get_font(role, size)
-        lines = _wrap_lines(text, font, max_w, max_lines)
         lh = size * 1.12
-        if len(lines) * lh <= max_h and all(l for l in lines):
-            return font, lines, size, lh
+        for ml in range(1, max_lines + 1):
+            lines = _wrap_lines(text, font, max_w, ml)
+            if len(lines) * lh <= max_h and all(l for l in lines):
+                return font, lines, size, lh
         size = int(size * 0.93)
-    font = get_font(role, min_size)
-    return font, _wrap_lines(text, font, max_w, max_lines), min_size, min_size * 1.12
+    # fase 2: judul sangat panjang — font kecil, baris lebih banyak
+    for ml in (max_lines + 2, max_lines + 5, max_lines + 10):
+        size = min_size
+        while size >= 9:
+            font = get_font(role, size)
+            lh = size * 1.12
+            lines = _wrap_lines(text, font, max_w, ml)
+            if len(lines) * lh <= max_h and all(l for l in lines):
+                return font, lines, size, lh
+            size = int(size * 0.9)
+    # pengaman terakhir: font terkecil, baris tanpa batas (teks tetap utuh)
+    for sz in (9, 8, 7):
+        font = get_font(role, sz)
+        lines = _wrap_lines(text, font, max_w)
+        if len(lines) * sz * 1.12 <= max_h:
+            return font, lines, sz, sz * 1.12
+    return font, lines, 7, 7 * 1.12
 
 
 def draw_tracked(d, cx, y, text, font, fill, tracking=0, shadow=None):
@@ -243,7 +268,7 @@ def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
     start = int(H * (0.155 if landscape else 0.135))
     max_h_title = H * (0.30 if landscape else 0.27)
     f_title, lines, tsize, lh = fit_title(title_text, "display", max_w, max_h_title,
-                                          start, max_lines=3)
+                                          start, max_lines=4)
     bottom_anchor = H * (0.90 if not sutradara and not release else 0.885)
     y_top = bottom_anchor - lh * len(lines)
 

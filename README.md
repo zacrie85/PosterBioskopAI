@@ -12,11 +12,12 @@ desain — tanpa internet, tanpa API key.
    (skor ketajaman + exposure + kontras) dan menebak **judul poster** dari
    nama file: `VID_20240102_petualangan_gunung_bromo.mp4` → judul
    **"Petualangan Gunung Bromo"** ✨
-2. **AI menggambar key art** — mesin **Stable Diffusion Turbo** (ONNX, CPU,
-   offline) menggambar ulang frame itu menjadi key art sesuai prompt: prompt
-   bawaan sinematik Hollywood terisi otomatis, atau ketik prompt sendiri
-   (kata kunci Indonesia otomatis diterjemahkan). Satu prompt bisa diterapkan
-   ke SEMUA video dalam mode batch.
+2. **AI merawat / menggambar key art** — mesin **Stable Diffusion Turbo** (ONNX, CPU,
+   offline). Bawaannya **foto asli tetap nyata**: preset "Foto asli + sentuhan AI"
+   hanya mepoles frame (wajah, tekstur, dan warna asli tetap terbaca), bukan
+   mengubahnya jadi kartun. Mau gaya bebas? Pilih preset Cepat–Maksimal. Kata kunci
+   Indonesia otomatis diterjemahkan; satu prompt bisa diterapkan ke SEMUA video 
+   dalam mode batch.
 3. **Tipografi & komposisi** — judul, tagline, garis emas, dan strip rilis
    dipasang dengan font Anton/Bebas Neue yang ikut dalam aplikasi, dengan
    **margin aman: teks dijamin tidak melewati batas kiri/kanan**. Rasio:
@@ -45,6 +46,28 @@ Biru · Senja · Rimba · Mono · Pop · Perak. Tips cepat: drama/kisah nyata �
 *Festival* atau *Klasik*; aksi/horor → *Sisi Gelap*, *Duotone*, *Skrim
 Puncak*; komedi/seru → *Komedi* + palet *Pop*; dokumenter bersih →
 *Minimalis* atau *Letterbox*.
+
+## Foto asli (bukan kartun) & judul selalu utuh — v2.2.0
+
+**Kenapa dulu terasa kartun?** Semua preset lama menjalankan AI pada strength
+1.0 = gambar ulang penuh, sehingga foto asli "hilang" jadi gaya CGI. Sekarang
+dropdown **Kualitas** punya dua preset baru:
+
+* **Foto asli + sentuhan AI (paling setia)** — bawaan. AI hanya bekerja dari
+  noise kecil (2 langkah dari sigma 0,93): komposisi, wajah, dan tekstur foto
+  asli tetap ada; hasilnya terasa seperti foto yang dipercantik, bukan kartun.
+* **Fotorealistik sinematik (seimbang)** — sentuhan AI lebih kuat (4 langkah
+  dari sigma 2,28) tetap fotorealistik.
+* Preset lama (Cepat/Normal/Tinggi/Maksimal) tetap tersedia untuk gaya bebas
+  ala poster Hollywood (boleh terasa CGI/ilustratif).
+
+Selain itu semua gaya kini **melarang AI menggambar huruf palsu** (tulisan
+ngawur seperti "ERANEAY" di key art) — judul selalu ditulis mesin tipografi.
+
+**Judul tidak pernah dipotong lagi.** Judul dari nama video/foto ditampilkan
+UTUH sepanjang apa pun: bila panjang, font otomatis mengecil dan baris
+bertambah (4 baris normal; judul ekstrem → font lebih kecil lagi), sehingga
+semua kata tampil lengkap tanpa tanda "…".
 
 ## Instalasi (Windows)
 

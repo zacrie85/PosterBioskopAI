@@ -204,7 +204,7 @@ class PosterApp(tk.Tk):
         self.var_sutradara = tk.StringVar()
         self.var_rasio = tk.StringVar(value=ai.RASIOS[0])
         self.var_batch_rasio = tk.StringVar(value=ai.RASIOS[0])
-        self.var_kualitas = tk.StringVar(value="Normal (2 langkah)")
+        self.var_kualitas = tk.StringVar(value="Foto asli + sentuhan AI (paling setia)")
         self.var_template = tk.StringVar(value="Tanpa template")
         self.var_file = tk.StringVar(value="Belum ada video/foto dipilih")
         self.var_model = tk.StringVar(value="Model AI: memeriksa…")
