@@ -217,10 +217,25 @@ class PosterApp(tk.Tk):
         root = ttk.Frame(self)
         root.pack(fill="both", expand=True)
 
-        # ---------------- kolom kiri: kontrol ----------------
-        left = ttk.Frame(root, width=380)
-        left.pack(side="left", fill="y", padx=(10, 6), pady=10)
-        left.pack_propagate(False)
+        # ------- kolom kiri: kontrol, di dalam kanvas yang bisa digulir -------
+        kiri = ttk.Frame(root)
+        kiri.pack(side="left", fill="y", padx=(10, 6), pady=10)
+        self.left_canvas = tk.Canvas(kiri, bg=BG, highlightthickness=0,
+                                     width=380)
+        vsb_kiri = ttk.Scrollbar(kiri, orient="vertical",
+                                 command=self.left_canvas.yview)
+        self.left_canvas.configure(yscrollcommand=vsb_kiri.set)
+        vsb_kiri.pack(side="right", fill="y")
+        self.left_canvas.pack(side="left", fill="both", expand=True)
+        left = ttk.Frame(self.left_canvas)
+        self._left_win = self.left_canvas.create_window((0, 0), window=left,
+                                                        anchor="nw")
+        left.bind("<Configure>", lambda e: self.left_canvas.configure(
+            scrollregion=self.left_canvas.bbox("all")))
+        self.left_canvas.bind(
+            "<Configure>",
+            lambda e: self.left_canvas.itemconfigure(self._left_win,
+                                                     width=e.width))
 
         f1 = ttk.Labelframe(left, text=" 1. SUMBER ", padding=8)
         f1.pack(fill="x")
@@ -274,9 +289,8 @@ class PosterApp(tk.Tk):
         ttk.Label(rowg, text="Gaya judul:", style="Panel.TLabel").pack(side="left")
         ttk.Combobox(rowg, textvariable=self.var_gaya_judul, state="readonly",
                      values=list(eng.GAYA_JUDUL), width=30).pack(side="left", padx=6)
-        ttk.Label(f3, text="Gaya judul mengatur variasi huruf: besar-kecil "
-                           "menyesuaikan panjang judul, kata akhir bisa miring "
-                           "berwarna aksen — semacam poster sungguhan.",
+        ttk.Label(f3, text="Huruf besar-kecil menyesuaikan panjang judul; "
+                           "kata akhir bisa miring aksen.",
                   style="Dim.TLabel", wraplength=350, justify="left").pack(
                       anchor="w", pady=(2, 0))
 
@@ -304,18 +318,22 @@ class PosterApp(tk.Tk):
         ttk.Button(rowt, text="🎨", width=3,
                    command=self.buka_galeri_template).pack(side="left",
                                                            padx=(6, 0))
-        ttk.Label(f4, text="🎨 = pilih visual dari 131 template (klik "
-                           "pratinjaunya). PNG/JPG milikmu: taruh di folder "
-                           "templates\\ lalu klik 📁 (PNG transparan = di "
-                           "atas art, JPEG = latar).",
-                  style="Dim.TLabel", wraplength=350, justify="left").pack(
-                      anchor="w", pady=(3, 0))
-        self.lbl_tmpl = ttk.Label(f4, text="(pratinjau template muncul di sini)",
-                                  anchor="center", style="Dim.TLabel")
-        self.lbl_tmpl.pack(anchor="center", pady=(6, 0))
+        rowpv = ttk.Frame(f4)
+        rowpv.pack(fill="x", pady=(5, 0))
+        self.lbl_tmpl = ttk.Label(rowpv, text="(pratinjau\ntemplate)",
+                                  anchor="center", style="Dim.TLabel",
+                                  width=14)
+        self.lbl_tmpl.pack(side="left", padx=(2, 8))
         self._tmpl_photo = None
         self._tmpl_cache = {}
-        self.var_template.trace_add("write", lambda *_: self.perbarui_pratinjau_template())
+        ttk.Label(rowpv, text="🎨 galeri 131 template · PNG/JPG milikmu: "
+                              "taruh di folder templates\\ lalu klik 📁 "
+                              "(PNG transparan = di atas art, JPEG = latar). "
+                              "Pratinjau kiri ikut berubah.",
+                  style="Dim.TLabel", wraplength=218, justify="left").pack(
+                      side="left", fill="both", expand=True)
+        self.var_template.trace_add("write",
+                                    lambda *_: self.perbarui_pratinjau_template())
         self.perbarui_pratinjau_template()
         rowv = ttk.Frame(f4)
         rowv.pack(fill="x", pady=(5, 0))
@@ -326,8 +344,10 @@ class PosterApp(tk.Tk):
         ttk.Label(f4, textvariable=self.var_model, style="Dim.TLabel",
                   wraplength=350, justify="left").pack(anchor="w", pady=(5, 0))
 
-        ttk.Button(left, text="🎬  BUAT POSTER DENGAN AI!", style="Big.TButton",
-                   command=self.buat_poster).pack(fill="x", pady=(12, 4))
+        self.btn_buat = ttk.Button(left, text="🎬  BUAT POSTER DENGAN AI!",
+                                   style="Big.TButton",
+                                   command=self.buat_poster)
+        self.btn_buat.pack(fill="x", pady=(12, 4))
         ttk.Button(left, text="💾  Simpan Poster Resolusi Tinggi…",
                    style="Gold.TButton", command=self.simpan).pack(fill="x")
 
@@ -353,6 +373,32 @@ class PosterApp(tk.Tk):
 
         ttk.Label(self, textvariable=self.var_status, style="Dim.TLabel",
                   padding=(12, 4)).pack(fill="x", side="bottom")
+        self._pasang_gulir_kiri(left)
+
+    # ------------------------------------------------------- gulir kiri
+    def _pasang_gulir_kiri(self, panel):
+        """Roda mouse / tombol gulir: geser panel kontrol kiri.
+        Panel kiri bisa lebih tinggi dari jendela pada layar pendek, jadi
+        SEMUA kontrol tetap terjangkau (tombol BUAT POSTER & Mode Batch)."""
+
+        def gulir(ev):
+            naik = getattr(ev, "num", None) == 4 or getattr(ev, "delta", 0) > 0
+            self.left_canvas.yview_scroll(-2 if naik else 2, "units")
+            return "break"
+
+        def pasang(w):
+            for urutan in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                w.bind(urutan, gulir)
+            for c in w.winfo_children():
+                pasang(c)
+
+        pasang(panel)
+        pasang(self.left_canvas)      # area kosong antar-kontrol juga menggulir
+
+    def gulir_kiri_ke(self, atas=True):
+        """Lompat panel kiri ke puncak/dasar (dipakai saat status berubah)."""
+        self.left_canvas.yview_moveto(0.0 if atas else 1.0)
+        self.left_canvas.update_idletasks()
 
     # ------------------------------------------------------- model AI
     def _refresh_model_status(self):
@@ -481,7 +527,7 @@ class PosterApp(tk.Tk):
         try:
             ph = self._tmpl_cache.get(nama)
             if ph is None:
-                im = tg.render_thumbnail(nama, size=(146, 260))
+                im = tg.render_thumbnail(nama, size=(124, 220))
                 ph = ImageTk.PhotoImage(im)
                 self._tmpl_cache[nama] = ph
             self._tmpl_photo = ph

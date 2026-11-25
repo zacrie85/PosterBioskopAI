@@ -88,6 +88,13 @@ untuk menghapus** strip itu. Mode batch: `--rilis ""`.
 Semua gaya menyejajarkan garis dasar huruf besar-kecil dan tetap **tidak
 pernah memotong teks**: judul sepanjang apa pun tampil utuh.
 
+## Panel kiri bisa digulir — v2.3.1
+
+Pada layar pendek, seluruh panel kontrol kiri kini punya **scrollbar sendiri +
+roda mouse**: kontrol apa pun yang terpotong (termasuk tombol **BUAT POSTER
+DENGAN AI!** dan MODE BATCH) cukup digulir ke bawah. Pratinjau template juga
+dipindah berdampingan dengan keterangan agar hemat ruang.
+
 ## Instalasi (Windows)
 
 1. Buka [Releases](https://github.com/zacrie85/PosterBioskopAI/releases) → dari
