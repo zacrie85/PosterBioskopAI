@@ -218,6 +218,10 @@ def _tracked_fit(text, font, max_w, base_tracking):
     return 0
 
 
+import bingkai as bingkai_mod
+import penata as penata_mod
+
+
 # ---------------------------------------------------------------------------
 # Variasi gaya judul: ukuran per kata menyesuaikan panjang judul, seperti
 # poster bioskop sungguhan (kata penting besar, kata sambung kecil, atau
@@ -394,7 +398,9 @@ def gambar_judul(img, susunan, cx, y_top, utama=(247, 246, 244, 255),
 def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
                    sutradara="", studio="POSTER BIOSKOP PICTURES",
                    release="SEGERA DI BIOSKOP", seed=7, template=None,
-                   gaya_judul="Otomatis (menyesuaikan judul)"):
+                   gaya_judul="Otomatis (menyesuaikan judul)",
+                   penata="Otomatis dari gambar",
+                   bingkai="Otomatis (dari gambar)"):
     """Susun poster final: key art AI + tipografi dengan margin aman.
     Kalau `template` diisi (path file di folder templates/ atau path
     langsung), susunan visual mengikuti template itu (template_engine).
@@ -404,14 +410,27 @@ def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
         return template_engine.compose(art, title, template, size=size,
                                        tagline=tagline, pemain=pemain,
                                        sutradara=sutradara, release=release,
-                                       studio=studio, gaya_judul=gaya_judul)
+                                       studio=studio, gaya_judul=gaya_judul,
+                                       penata=penata, bingkai=bingkai,
+                                       seed=seed)
     W, H = size
     art = ImageOps.exif_transpose(art).convert("RGB")
     art = cover_crop(art, W / H, focus=0.45).resize((W, H), RESAMPLE)
     img = finish_art(art)
 
+    # --- PENATA AI: baca palet & mood gambar, putuskan warna/gaya/kontras ---
+    an = penata_mod.analisa_gambar(img)
+    keputusan = penata_mod.pilih_tipografi(
+        an, gaya_pref=gaya_judul,
+        klasik=(penata or "").lower().startswith("klasik"))
+    nama_bingkai, _mood = penata_mod.pilih_bingkai(an, bingkai)
+    warna_judul = keputusan["utama"]
+    warna_aksen = keputusan["aksen"]
+    gold = (*warna_aksen, 255)
+
     landscape = W > H
-    img = _scrim(img, 0.42 if not landscape else 0.52, 1.0, 215)
+    img = _scrim(img, 0.42 if not landscape else 0.52, 1.0,
+                 keputusan["scrim"] or 215)
     if pemain:
         img = _scrim(img, 0.0, 0.13, 150, reverse=True)
 
@@ -419,11 +438,15 @@ def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
     d = ImageDraw.Draw(layer)
 
     # ====== MARGIN AMAN: semua teks dipaksa muat di dalam [margin, W-margin] ======
-    margin = max(int(W * 0.055), int(min(W, H) * 0.05), 24)
+    inset_bingkai = 0
+    if nama_bingkai:
+        img, inset_bingkai = bingkai_mod.gambar(img, nama_bingkai, an["palet"],
+                                                warna_aksen, seed=seed)
+    margin = max(int(W * 0.055), int(min(W, H) * 0.05), 24) + inset_bingkai
     max_w = W - 2 * margin
     cx = W / 2
 
-    gold = (242, 193, 78, 255)
+    # gold di-set dari warna aksen penata di atas
 
     # --- nama pemain (opsional, zona atas) ---
     if pemain:
@@ -438,11 +461,15 @@ def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
     title_text = (title or "").strip().upper() or "TANPA JUDUL"
     start = int(H * (0.155 if landscape else 0.135))
     max_h_title = H * (0.30 if landscape else 0.27)
+    gaya_eff = gaya_judul
+    if gaya_judul.startswith("Otomatis") and keputusan.get("gaya"):
+        gaya_eff = keputusan["gaya"]           # mood gambar menentukan
     sus = susun_judul(title_text, max_w, max_h_title, start,
-                      gaya=gaya_judul, max_lines=4)
+                      gaya=gaya_eff, max_lines=4)
     bottom_anchor = H * (0.90 if not sutradara and not release else 0.885)
     y_top = int(bottom_anchor - sus["tinggi"])
-    img, t_end = gambar_judul(img, sus, cx, y_top)
+    img, t_end = gambar_judul(img, sus, cx, y_top,
+                              utama=(*warna_judul, 255), aksen=gold)
 
     # garis aksen emas di bawah judul (selalu di dalam margin)
     ry = int(min(t_end + H * 0.012, H * 0.915))
@@ -476,7 +503,7 @@ def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
             by += H * 0.020
             ry = by                                  # geser strip rilis ke bawah
     # --- strip rilis + studio ---
-    y_strip = min(H * 0.955, H - int(H * 0.033))
+    y_strip = min(H * 0.955, H - int(H * 0.033) - inset_bingkai)
     if release and release.strip():
         f_rel = get_font("credit", max(12, int(H * 0.022)))
         tr = _tracked_fit(release.strip().upper(), f_rel, max_w, max(3, int(H * 0.007)))
@@ -487,10 +514,18 @@ def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
                      y_strip + H * 0.026 + max(2, int(H * 0.0025))], fill=gold)
     if studio and studio.strip():
         f_std = get_font("credit", max(9, int(H * 0.012)))
-        s = studio.strip().upper()
-        tr = _tracked_fit(s, f_std, max_w, max(2, int(H * 0.004)))
-        draw_tracked(d, cx, int(H * 0.985) - f_std.size, s, f_std,
-                     (215, 215, 215, 150), tracking=tr)
+        s_txt = studio.strip().upper()
+        tr = _tracked_fit(s_txt, f_std, max_w, max(2, int(H * 0.004)))
+        if release and release.strip():
+            # tepat di bawah garis bawah strip — tidak lagi menimpanya
+            y_std = y_strip + int(H * 0.026) + max(4, int(H * 0.006))
+        else:
+            y_std = int(H * 0.985) - f_std.size
+        if y_std + f_std.size > H - max(2, inset_bingkai) - 2:
+            y_std = None            # tak muat di atas bingkai -> lewati
+        if y_std is not None:
+            draw_tracked(d, cx, y_std, s_txt, f_std,
+                         (215, 215, 215, 150), tracking=tr)
 
     img = Image.alpha_composite(img.convert("RGBA"), layer).convert("RGB")
     return img

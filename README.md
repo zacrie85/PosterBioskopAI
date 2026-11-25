@@ -95,6 +95,30 @@ roda mouse**: kontrol apa pun yang terpotong (termasuk tombol **BUAT POSTER
 DENGAN AI!** dan MODE BATCH) cukup digulir ke bawah. Pratinjau template juga
 dipindah berdampingan dengan keterangan agar hemat ruang.
 
+## Penata AI + Bingkai & Hiasan — v2.4.0
+
+Panel baru **"5. BINGKAI & PENATA AI"** di aplikasi:
+
+* **Penata AI** — membaca key art (palet dominan via k-means, kecerahan,
+  saturasi, kehangatan, keramaian tepi, kecerahan zona judul), lalu memutuskan:
+  warna aksen diambil DARI gambar sendiri, gaya judul sesuai mood
+  (gelap->miring aksen, aksi->menonjol, ceria->klasik), dan **penjaga
+  kontras**: latar judul terang/ramai -> scrim otomatis diperkuat supaya teks
+  tidak tenggelam. Pilihan "Klasik (putih-emas)" mengembalikan perilaku lama.
+* **Bingkai & hiasan (10 gaya)** — Garis klasik, Emas mewah (pita emas
+  bergradasi + intan sudut), Film strip (lubang seluloid), Kertas sobek,
+  Halftone, Neon glow, Art deco (kipi sudut), Vignet lembut, Splat aksen
+  (percikan warna di sudut), Gradien warna (cuci warna diagonal).
+  Otomatis memilih gaya dari mood gambar; semua bingkai memakai warna dari
+  palet key art dan **margin teks menyesuaikan** agar judul tetap di dalam
+  bingkai.
+* **Tekstur AI pada bingkai** (opsional, lebih lambat) — 1 langkah img2img
+  SD-Turbo di tepi poster agar bingkai menyatu dengan key art; bagian tengah
+  (art + teks) dijaga tetap asli.
+
+Mode batch: `--bingkai "Emas mewah"`, `--penata "Klasik (putih-emas)"`,
+`--tekstur-bingkai`. Semua proses 100% offline, tanpa unduhan baru.
+
 ## Instalasi (Windows)
 
 1. Buka [Releases](https://github.com/zacrie85/PosterBioskopAI/releases) → dari

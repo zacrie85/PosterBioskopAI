@@ -25,7 +25,7 @@ import threading
 import urllib.request
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFilter
 
 import kamus_prompt
 
@@ -619,3 +619,27 @@ class PosterAI:
             if not self.keep_loaded:
                 self._sess.clear()
         return art
+
+    def tekstur(self, img, prompt_text=None, progress=None):
+        """Satukan gaya bingkai dengan key art: img2img kualitas 'paling
+        setia' di seluruh poster, lalu bagian TENGAH (art + teks) dipulihkan
+        dari gambar asli — hanya tepi/bingkai yang berubah tekstur.
+        Gagal/ model tak siap -> kembalikan gambar tanpa perubahan."""
+        if not self.ready():
+            return img
+        try:
+            hasil = self.generate(img, prompt_text or "cinematic film poster",
+                                  img.size,
+                                  quality_key="Foto asli + sentuhan AI "
+                                              "(paling setia)",
+                                  progress=progress)
+            w, h = img.size
+            m = int(min(w, h) * 0.085)
+            mask = Image.new("L", (w, h), 0)
+            dm = ImageDraw.Draw(mask)
+            dm.rectangle([m, m, w - m, h - m], fill=255)
+            mask = mask.filter(ImageFilter.GaussianBlur(12))
+            return Image.composite(img.convert("RGB"), hasil.convert("RGB"),
+                                   mask)
+        except Exception:                                      # noqa: BLE001
+            return img

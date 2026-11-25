@@ -26,6 +26,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 import poster_engine as eng
 
+import bingkai as bing
+import penata as pen
 RESAMPLE = eng.RESAMPLE
 _BAWAAN = {"judul": [0.06, 0.70, 0.94, 0.88], "warna": "#F7F6F4",
            "aksen": "#F2C14E", "garis": True, "tanggal": True,
@@ -99,7 +101,9 @@ def _warna(hexstr, fallback):
 def compose(art, title, template_path, size=(1080, 1920), tagline="",
             pemain="", sutradara="", release="SEGERA DI BIOSKOP",
             studio="POSTER BIOSKOP PICTURES",
-            gaya_judul="Otomatis (menyesuaikan judul)"):
+            gaya_judul="Otomatis (menyesuaikan judul)",
+            penata="Otomatis dari gambar", bingkai="Otomatis (dari gambar)",
+            seed=7):
     """Key art AI + template + tipografi sesuai zona template.
     Return PIL RGB image berukuran `size`."""
     W, H = size
@@ -148,6 +152,15 @@ def compose(art, title, template_path, size=(1080, 1920), tagline="",
         d.rectangle([cx - max_w * 0.16, ry, cx + max_w * 0.16,
                      ry + max(2, int(H * 0.003))], fill=(*aksen, 255))
 
+    # --- bingkai & hiasan (v2.4.0) digambar paling atas, teks tetap utuh ---
+    nama_b = None
+    if bingkai and not str(bingkai).lower().startswith("tanpa"):
+        an = pen.analisa_gambar(img)
+        nama_b, _ = pen.pilih_bingkai(an, bingkai)
+        if nama_b:
+            img, _inset = bing.gambar(img, nama_b, an["palet"], aksen,
+                                      seed=seed)
+
     if tagline and tagline.strip():
         f_tag = eng.get_font("serif", max(12, int(H * 0.024)))
         t = "\u201c" + tagline.strip().upper() + "\u201d"
@@ -187,7 +200,8 @@ def compose(art, title, template_path, size=(1080, 1920), tagline="",
                    fill=(230, 230, 230, 210))
             by += H * 0.020
 
-    if cfg.get("studio", True) and studio and studio.strip():
+    if (cfg.get("studio", True) and studio and studio.strip()
+            and nama_b is None):        # bingkai aktif: studio dilewati
         f_std = eng.get_font("credit", max(9, int(H * 0.012)))
         s = studio.strip().upper()
         tr = eng._tracked_fit(s, f_std, max_w, max(2, int(H * 0.004)))

@@ -65,6 +65,7 @@ from PIL import Image, ImageTk
 import batch_poster as bp
 import poster_ai as ai
 import poster_engine as eng
+import bingkai as bingkai_mod
 import frame_picker as fp
 import template_engine as te
 import template_gallery as tg
@@ -204,6 +205,9 @@ class PosterApp(tk.Tk):
         self.var_sutradara = tk.StringVar()
         self.var_rilis = tk.StringVar(value="SEGERA DI BIOSKOP")
         self.var_gaya_judul = tk.StringVar(value=eng.GAYA_JUDUL[0])
+        self.var_bingkai = tk.StringVar(value="Otomatis (dari gambar)")
+        self.var_penata = tk.StringVar(value="Otomatis dari gambar")
+        self.var_tekstur = tk.BooleanVar(value=False)
         self.var_rasio = tk.StringVar(value=ai.RASIOS[0])
         self.var_batch_rasio = tk.StringVar(value=ai.RASIOS[0])
         self.var_kualitas = tk.StringVar(value="Foto asli + sentuhan AI (paling setia)")
@@ -343,6 +347,33 @@ class PosterApp(tk.Tk):
             side="left", padx=(6, 0))
         ttk.Label(f4, textvariable=self.var_model, style="Dim.TLabel",
                   wraplength=350, justify="left").pack(anchor="w", pady=(5, 0))
+
+        f45 = ttk.Labelframe(left, text=" 5. BINGKAI & PENATA AI (baru) ",
+                             padding=8)
+        f45.pack(fill="x", pady=(8, 0))
+        rowb1 = ttk.Frame(f45)
+        rowb1.pack(fill="x")
+        ttk.Label(rowb1, text="Bingkai & hiasan:", style="Panel.TLabel").pack(
+            side="left")
+        ttk.Combobox(rowb1, textvariable=self.var_bingkai, state="readonly",
+                     values=["Otomatis (dari gambar)", "Tanpa bingkai",
+                             *bingkai_mod.NAMA], width=24).pack(side="left",
+                                                                padx=6)
+        rowb2 = ttk.Frame(f45)
+        rowb2.pack(fill="x", pady=(4, 0))
+        ttk.Label(rowb2, text="Penata warna/gaya:", style="Panel.TLabel").pack(
+            side="left")
+        ttk.Combobox(rowb2, textvariable=self.var_penata, state="readonly",
+                     values=["Otomatis dari gambar", "Klasik (putih-emas)"],
+                     width=24).pack(side="left", padx=6)
+        ttk.Checkbutton(f45, text="Tekstur AI pada bingkai (1 langkah AI "
+                                  "ekstra, lebih lambat)",
+                        variable=self.var_tekstur).pack(anchor="w", pady=(3, 0))
+        ttk.Label(f45, text="Penata AI membaca palet & mood gambar: memilih "
+                            "warna aksen, gaya judul, kekuatan scrim (teks "
+                            "tak tenggelam), dan bingkai yang cocok.",
+                  style="Dim.TLabel", wraplength=350, justify="left").pack(
+                      anchor="w", pady=(2, 0))
 
         self.btn_buat = ttk.Button(left, text="🎬  BUAT POSTER DENGAN AI!",
                                    style="Big.TButton",
@@ -625,6 +656,8 @@ class PosterApp(tk.Tk):
         judul, tagline, pemain, sutradara = (self.var_judul.get(), self.var_tagline.get(),
                                              self.var_pemain.get(), self.var_sutradara.get())
         rilis, gaya_judul = self.var_rilis.get().strip(), self.var_gaya_judul.get()
+        penata = self.var_penata.get()
+        bingkai = self.var_bingkai.get()
         full = ai.poster_full_size(rasio_key, video_ratio)
         preview = eng.preview_size(full)
 
@@ -638,7 +671,11 @@ class PosterApp(tk.Tk):
                 poster = eng.compose_poster(art, judul, size=full, tagline=tagline,
                                             pemain=pemain, sutradara=sutradara,
                                             release=rilis, gaya_judul=gaya_judul,
+                                            penata=penata, bingkai=bingkai,
                                             template=template_path)
+                if self.var_tekstur.get() and not bingkai.lower().startswith(
+                        "tanpa"):
+                    poster = self.poster_ai.tekstur(poster, prompt)
             except Exception as exc:                       # noqa: BLE001
                 # Catat galat ASLI seketika di thread kerja (traceback utuh ke
                 # log), lalu tampilkan via variabel lokal biasa — variabel
@@ -711,6 +748,8 @@ class PosterApp(tk.Tk):
         judul_v, tagline, pemain, sutradara = (self.var_judul.get(), self.var_tagline.get(),
                                                self.var_pemain.get(), self.var_sutradara.get())
         rilis, gaya_judul = self.var_rilis.get().strip(), self.var_gaya_judul.get()
+        penata = self.var_penata.get()
+        bingkai = self.var_bingkai.get()
 
         def work():
             try:
@@ -719,7 +758,11 @@ class PosterApp(tk.Tk):
                 poster = eng.compose_poster(art, judul_v, size=full, tagline=tagline,
                                             pemain=pemain, sutradara=sutradara,
                                             release=rilis, gaya_judul=gaya_judul,
+                                            penata=penata, bingkai=bingkai,
                                             template=template_path)
+                if self.var_tekstur.get() and not bingkai.lower().startswith(
+                        "tanpa"):
+                    poster = self.poster_ai.tekstur(poster, prompt)
                 poster.save(path, quality=92)
                 ok, err, p = True, None, path
             except Exception as exc:                       # noqa: BLE001
@@ -836,6 +879,9 @@ class PosterApp(tk.Tk):
                                    kualitas=self.var_kualitas.get(),
                                    rilis=self.var_rilis.get().strip(),
                                    gaya_judul=self.var_gaya_judul.get(),
+                                   bingkai=self.var_bingkai.get(),
+                                   penata=self.var_penata.get(),
+                                   tekstur_ai=self.var_tekstur.get(),
                                    log=log, progress=prog,
                                    should_continue=lambda: not cancel["v"])
             except Exception as exc:                # noqa: BLE001
