@@ -235,7 +235,6 @@ def open_folder(path):
 def main():
     ap = argparse.ArgumentParser(
         description="PosterBioskopAI MODE BATCH AI: folder video/foto → poster AI semua")
-    ap.add_argument("folder", help="folder berisi video/foto")
     ap.add_argument("--out", default=None, help="folder hasil (bawaan: <folder>_poster)")
     ap.add_argument("--rasio", default="Ikuti rasio video",
                     choices=["Ikuti rasio video", "9:16", "16:9"])
