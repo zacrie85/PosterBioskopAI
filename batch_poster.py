@@ -59,7 +59,8 @@ def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None,
                 template=None, rilis="SEGERA DI BIOSKOP",
                 gaya_judul="Otomatis (menyesuaikan judul)",
                 penata="Otomatis dari gambar", bingkai="Otomatis (dari gambar)",
-                tekstur_ai=False):
+                tekstur_ai=False, objek="Tanpa objek", mood_neural=False,
+                varian=1):
     """Proses satu file: frame -> AI -> poster tipografi. Return dict ringkasan."""
     t0 = time.time()
     is_vid = fp.is_video(path)
@@ -86,12 +87,32 @@ def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None,
     art = engine.generate(img, prompt, canvas, quality_key=kualitas, progress=prog)
     poster = eng.compose_poster(art, judul, size=full, template=template,
                                 release=rilis, gaya_judul=gaya_judul,
-                                penata=penata, bingkai=bingkai)
+                                penata=penata, bingkai=bingkai,
+                                objek=objek, ai=engine,
+                                mood_neural_aktif=mood_neural)
     if tekstur_ai and bingkai and not bingkai.lower().startswith("tanpa"):
         try:
             poster = process_one._engine.tekstur(poster, prompt)
         except Exception:                                  # noqa: BLE001
             pass
+    if varian and varian > 1:
+        ekstra = [("Klasik (putih-emas)", "Emas mewah"),
+                  ("Otomatis dari gambar", "Film strip")]
+        for i, (p_x, b_x) in enumerate(ekstra[: varian - 1], 2):
+            try:
+                pv = eng.compose_poster(art, judul, size=full, template=template,
+                                        release=rilis, gaya_judul=gaya_judul,
+                                        penata=p_x, bingkai=b_x, objek=objek,
+                                        ai=engine, mood_neural_aktif=mood_neural)
+                pv.save(os.path.join(out_dir,
+                                     _unique_name(judul, used)
+                                     .replace(".png", "") + "-var%d.png" % i),
+                        quality=92)
+                if log:
+                    log("      varian %d gaya %s ✓" % (i, b_x))
+            except Exception as exc:                       # noqa: BLE001
+                if log:
+                    log("      varian %d gagal: %s" % (i, exc))
     out_path = os.path.join(out_dir, _unique_name(judul, used) + ".png")
     poster.save(out_path, quality=92)
     return {
@@ -112,7 +133,8 @@ def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
               should_continue=None, template=None,
               rilis="SEGERA DI BIOSKOP", gaya_judul="Otomatis (menyesuaikan judul)",
               penata="Otomatis dari gambar", bingkai="Otomatis (dari gambar)",
-              tekstur_ai=False):
+              tekstur_ai=False, objek="Tanpa objek", mood_neural=False,
+              varian=1):
     """Proses SEMUA video/foto di folder dengan SATU prompt AI yang sama.
 
     log(msg)               -> pesan kemajuan (mis. untuk Text di GUI / print)
@@ -157,6 +179,8 @@ def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
     log(f"Bingkai: {bingkai} · Penata: {penata}"
         + (" · Tekstur AI aktif" if tekstur_ai and bingkai
            and not bingkai.lower().startswith("tanpa") else ""))
+    log(f"Objek AI: {objek} · Mood CLIP: {'aktif' if mood_neural else 'mati'}"
+        + (" · 3 varian per file" if varian and varian > 1 else ""))
     if template_path:
         log(f"Template: {os.path.basename(template_path)}")
     log(f"Prompt untuk SEMUA file: {prompt_pendek}")
@@ -174,7 +198,9 @@ def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
             r = process_one(path, out_dir, ratio_key, prompt, kualitas, used,
                             log=log, template=template_path, rilis=rilis,
                             gaya_judul=gaya_judul, penata=penata,
-                            bingkai=bingkai, tekstur_ai=tekstur_ai)
+                            bingkai=bingkai, tekstur_ai=tekstur_ai,
+                            objek=objek, mood_neural=mood_neural,
+                            varian=varian)
             hasil.append(r)
             done += 1
             sumber = f"detik {r['detik']} dari video" if r["video"] else "foto"
@@ -226,6 +252,19 @@ def main():
     ap.add_argument("--tekstur-bingkai", action="store_true",
                     help="1 langkah img2img ekstra agar bingkai menyatu "
                          "dengan key art (lebih lambat)")
+    ap.add_argument("--objek", default="Tanpa objek",
+                    help="Tanpa objek | Otomatis (dari mood) | Pisau | "
+                         "Pedang | Mahkota | Cincin")
+    ap.add_argument("--mood-neural", action="store_true",
+                    help="pakai model mood CLIP jika sudah diunduh")
+    ap.add_argument("--varian", type=int, default=1,
+                    help="1 = poster utama saja; 2-3 = tambah varian gaya "
+                         "lain per file (-var2, -var3)")
+    ap.add_argument("--unduh-mood", action="store_true",
+                    help="unduh model mood CLIP (±90 MB) lalu keluar")
+    ap.add_argument("folder", nargs="?", default=None,
+                    help="folder berisi video/foto (tidak perlu untuk "
+                         "--unduh-mood)")
     ap.add_argument("--rilis", default="SEGERA DI BIOSKOP",
                     help="teks strip di bawah judul; kosongkan ('') untuk "
                          "menghapus strip")
@@ -236,11 +275,21 @@ def main():
                          "atau path file PNG/JPG; 'Tanpa' = tipografi bawaan")
     a = ap.parse_args()
 
+    if a.unduh_mood:
+        import mood_neural
+        ok, msg = mood_neural.unduh(progress=print)
+        print("Model mood CLIP siap ✓" if ok else "GAGAL: %s" % msg)
+        sys.exit(0 if ok else 1)
+    if not a.folder:
+        ap.error("folder wajib (kecuali saat memakai --unduh-mood)")
+
     try:
         res = run_batch(a.folder, a.out, a.rasio, a.prompt, a.kualitas, log=print,
                         template=a.template, rilis=a.rilis,
                         gaya_judul=a.gaya_judul, penata=a.penata,
-                        bingkai=a.bingkai, tekstur_ai=a.tekstur_bingkai)
+                        bingkai=a.bingkai, tekstur_ai=a.tekstur_bingkai,
+                        objek=a.objek, mood_neural=a.mood_neural,
+                        varian=a.varian)
     except (ValueError, RuntimeError) as exc:
         # pesan ramah (folder kosong, model belum lengkap, mesin AI gagal) —
         # bukan traceback mentah

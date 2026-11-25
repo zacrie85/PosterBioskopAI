@@ -66,6 +66,7 @@ import batch_poster as bp
 import poster_ai as ai
 import poster_engine as eng
 import bingkai as bingkai_mod
+import mood_neural
 import frame_picker as fp
 import template_engine as te
 import template_gallery as tg
@@ -208,6 +209,10 @@ class PosterApp(tk.Tk):
         self.var_bingkai = tk.StringVar(value="Otomatis (dari gambar)")
         self.var_penata = tk.StringVar(value="Otomatis dari gambar")
         self.var_tekstur = tk.BooleanVar(value=False)
+        self.var_objek = tk.StringVar(value="Tanpa objek")
+        self.var_mood_neural = tk.BooleanVar(value=True)
+        self.var_varian_batch = tk.BooleanVar(value=False)
+        self._varian_aktif = False
         self.var_rasio = tk.StringVar(value=ai.RASIOS[0])
         self.var_batch_rasio = tk.StringVar(value=ai.RASIOS[0])
         self.var_kualitas = tk.StringVar(value="Foto asli + sentuhan AI (paling setia)")
@@ -369,9 +374,34 @@ class PosterApp(tk.Tk):
         ttk.Checkbutton(f45, text="Tekstur AI pada bingkai (1 langkah AI "
                                   "ekstra, lebih lambat)",
                         variable=self.var_tekstur).pack(anchor="w", pady=(3, 0))
+        rowb3 = ttk.Frame(f45)
+        rowb3.pack(fill="x", pady=(4, 0))
+        ttk.Label(rowb3, text="Objek AI:", style="Panel.TLabel").pack(side="left")
+        ttk.Combobox(rowb3, textvariable=self.var_objek, state="readonly",
+                     values=["Tanpa objek", "Otomatis (dari mood)",
+                             "Pisau", "Pedang", "Mahkota", "Cincin"],
+                     width=22).pack(side="left", padx=6)
+        rowb4 = ttk.Frame(f45)
+        rowb4.pack(fill="x", pady=(3, 0))
+        ttk.Checkbutton(rowb4, text="Mood CLIP (jika terunduh)",
+                        variable=self.var_mood_neural).pack(side="left")
+        ttk.Button(rowb4, text="🧠 Unduh model mood (±90 MB)", width=24,
+                   command=self.unduh_mood).pack(side="left", padx=6)
+        rowb5 = ttk.Frame(f45)
+        rowb5.pack(fill="x", pady=(3, 0))
+        ttk.Button(rowb5, text="🎲 Buat 3 Varian", width=17,
+                   command=self.buat_varian).pack(side="left")
+        ttk.Button(rowb5, text="🖼 Ekspor Bingkai PNG", width=20,
+                   command=self.ekspor_bingkai).pack(side="left", padx=6)
+        rowb6 = ttk.Frame(f45)
+        rowb6.pack(fill="x", pady=(2, 0))
+        ttk.Checkbutton(rowb6, text="Mode Batch: 3 varian per video",
+                        variable=self.var_varian_batch).pack(side="left")
         ttk.Label(f45, text="Penata AI membaca palet & mood gambar: memilih "
-                            "warna aksen, gaya judul, kekuatan scrim (teks "
-                            "tak tenggelam), dan bingkai yang cocok.",
+                            "warna aksen, gaya judul, scrim, dan bingkai. "
+                            "Objek AI menambah pisau/mahkota dsb di pojok; "
+                            "🎲 = 3 poster gaya beda sekaligus; 🖼 = bingkai "
+                            "PNG transparan untuk Canva/dll.",
                   style="Dim.TLabel", wraplength=350, justify="left").pack(
                       anchor="w", pady=(2, 0))
 
@@ -668,14 +698,44 @@ class PosterApp(tk.Tk):
             try:
                 art = self.poster_ai.generate(img_src, prompt, size,
                                               quality_key=quality, progress=prog)
-                poster = eng.compose_poster(art, judul, size=full, tagline=tagline,
-                                            pemain=pemain, sutradara=sutradara,
-                                            release=rilis, gaya_judul=gaya_judul,
-                                            penata=penata, bingkai=bingkai,
-                                            template=template_path)
-                if self.var_tekstur.get() and not bingkai.lower().startswith(
-                        "tanpa"):
-                    poster = self.poster_ai.tekstur(poster, prompt)
+                self._art_terakhir = art
+                varian_file = None
+                if self._varian_aktif:
+                    # --- VARIAN A/B: satu AI, tiga gaya sekaligus ---
+                    folder_h = os.path.join(ai.app_base_dir(), "hasil")
+                    os.makedirs(folder_h, exist_ok=True)
+                    aman = (re.sub(r"[^\w\- ]", "", judul).strip() or "poster")
+                    varian_file = []
+                    pilihan = [("Otomatis dari gambar", "Otomatis (dari gambar)"),
+                               ("Klasik (putih-emas)", "Emas mewah"),
+                               ("Otomatis dari gambar", "Film strip")]
+                    for i, (p_x, b_x) in enumerate(pilihan, 1):
+                        poster = eng.compose_poster(
+                            art, judul, size=full, tagline=tagline,
+                            pemain=pemain, sutradara=sutradara, release=rilis,
+                            gaya_judul=gaya_judul, penata=p_x, bingkai=b_x,
+                            objek=self.var_objek.get(), ai=self.poster_ai,
+                            mood_neural_aktif=self.var_mood_neural.get(),
+                            template=template_path)
+                        if i == 1 and self.var_tekstur.get() and \
+                                not b_x.lower().startswith("tanpa"):
+                            poster = self.poster_ai.tekstur(poster, prompt)
+                        fp_var = os.path.join(folder_h, "%s-var%d.png" % (aman, i))
+                        poster.save(fp_var, quality=92)
+                        varian_file.append(fp_var)
+                else:
+                    poster = eng.compose_poster(art, judul, size=full,
+                                                tagline=tagline,
+                                                pemain=pemain, sutradara=sutradara,
+                                                release=rilis, gaya_judul=gaya_judul,
+                                                penata=penata, bingkai=bingkai,
+                                                objek=self.var_objek.get(),
+                                                ai=self.poster_ai,
+                                                mood_neural_aktif=self.var_mood_neural.get(),
+                                                template=template_path)
+                    if self.var_tekstur.get() and not bingkai.lower().startswith(
+                            "tanpa"):
+                        poster = self.poster_ai.tekstur(poster, prompt)
             except Exception as exc:                       # noqa: BLE001
                 # Catat galat ASLI seketika di thread kerja (traceback utuh ke
                 # log), lalu tampilkan via variabel lokal biasa — variabel
@@ -691,10 +751,72 @@ class PosterApp(tk.Tk):
                 self.after(0, lambda: self.var_status.set("Gagal render: %s" % pesan))
                 return
             self.after(0, lambda: self._show_preview(poster, preview))
+            if varian_file:
+                self.after(0, lambda: self.var_status.set(
+                    "3 varian tersimpan di folder 'hasil' ✓  " +
+                    " · ".join(os.path.basename(f) for f in varian_file)))
         threading.Thread(target=work, daemon=True).start()
 
     def _render_done(self):
         self._busy = False
+        self._varian_aktif = False
+
+    def buat_varian(self):
+        """🎲 Satu key art AI, tiga poster gaya berbeda (varian A/B)."""
+        if not self.source_img:
+            messagebox.showinfo("Belum ada sumber",
+                                "Pilih VIDEO atau FOTO dulu ya, kawan!")
+            return
+        ok, _, _, _ = ai.model_status()
+        if not ok:
+            messagebox.showinfo("Model AI belum ada",
+                                "Unduh model AI dulu lewat 🤖 Status Model AI.")
+            self.dialog_model()
+            return
+        self._varian_aktif = True
+        self._render_async()
+
+    def unduh_mood(self):
+        """🧠 Unduh model mood CLIP (± 90 MB) di latar belakang."""
+        if mood_neural.siap():
+            self.var_status.set("Model mood CLIP sudah terpasang ✓")
+            return
+        self.var_status.set("Mengunduh model mood CLIP…")
+
+        def w():
+            ok, msg = mood_neural.unduh(
+                progress=lambda m: self.after(0,
+                                              lambda: self.var_status.set(m)))
+            pesan = ("Model mood CLIP siap ✓" if ok else
+                     "Gagal unduh model mood: %s" % msg)
+            self.after(0, lambda: self.var_status.set(pesan))
+
+        threading.Thread(target=w, daemon=True).start()
+
+    def ekspor_bingkai(self):
+        """🖼 Ekspor bingkai aktif sebagai PNG transparan (Canva/dll)."""
+        art = getattr(self, "_art_terakhir", None)
+        if art is None:
+            import template_gallery as tgl
+            art = tgl.art_contoh((540, 960))
+        an = eng.penata_mod.analisa_gambar(art)
+        nama_b, _ = eng.penata_mod.pilih_bingkai(an, self.var_bingkai.get())
+        if not nama_b:
+            self.var_status.set("Bingkai 'Tanpa' — pilih gaya bingkai dulu.")
+            return
+        path = filedialog.asksaveasfilename(
+            title="Ekspor bingkai PNG transparan",
+            initialfile="bingkai-" + nama_b.lower().replace(" ", "-"),
+            defaultextension=".png")
+        if not path:
+            return
+        layer, _inset = eng.bingkai_mod.transparan(
+            nama_b, art.size, an["palet"], eng.penata_mod.pilih_akses(an))
+        layer.save(path)
+        self.var_status.set("Bingkai PNG transparan tersimpan: %s "
+                            "(ukuran pratinjau %dx%d — ganti rasio lalu ekspor "
+                            "lagi untuk ukuran lain)" % (path, art.size[0],
+                                                         art.size[1]))
 
     def _show_preview(self, poster, preview_size):
         self._busy = False
@@ -755,10 +877,14 @@ class PosterApp(tk.Tk):
             try:
                 art = self.poster_ai.generate(img_src, prompt, size,
                                               quality_key=quality)
+                self._art_terakhir = art
                 poster = eng.compose_poster(art, judul_v, size=full, tagline=tagline,
                                             pemain=pemain, sutradara=sutradara,
                                             release=rilis, gaya_judul=gaya_judul,
                                             penata=penata, bingkai=bingkai,
+                                            objek=self.var_objek.get(),
+                                            ai=self.poster_ai,
+                                            mood_neural_aktif=self.var_mood_neural.get(),
                                             template=template_path)
                 if self.var_tekstur.get() and not bingkai.lower().startswith(
                         "tanpa"):
@@ -882,6 +1008,10 @@ class PosterApp(tk.Tk):
                                    bingkai=self.var_bingkai.get(),
                                    penata=self.var_penata.get(),
                                    tekstur_ai=self.var_tekstur.get(),
+                                   objek=self.var_objek.get(),
+                                   mood_neural=self.var_mood_neural.get(),
+                                   varian=3 if self.var_varian_batch.get()
+                                   else 1,
                                    log=log, progress=prog,
                                    should_continue=lambda: not cancel["v"])
             except Exception as exc:                # noqa: BLE001

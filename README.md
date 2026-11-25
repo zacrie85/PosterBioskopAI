@@ -119,6 +119,24 @@ Panel baru **"5. BINGKAI & PENATA AI"** di aplikasi:
 Mode batch: `--bingkai "Emas mewah"`, `--penata "Klasik (putih-emas)"`,
 `--tekstur-bingkai`. Semua proses 100% offline, tanpa unduhan baru.
 
+## 4 Fitur Baru — v2.5.0
+
+1. **Mood neural (CLIP)** — deteksi mood oleh jaringan syaraf sungguhan
+   (CLIP ViT-B/32 ONNX, ± 90 MB, opsional). Tower vision dijalankan di PC-mu;
+   embedding teks 5 mood sudah dihitung & ikut aplikasi (± 4 KB) — jadi
+   unduhannya kecil. Kalau model belum diunduh / hasilnya kurang yakin,
+   analisis statistik penata yang dipakai. Unduh: tombol **🧠 Unduh model
+   mood** di aplikasi, atau `batch_poster.py --unduh-mood`.
+2. **🎲 Buat 3 Varian** — satu key art AI, tiga poster gaya berbeda langsung
+   tersimpan di folder `hasil/` (Otomatis, Klasik-emas, Film strip). Mode
+   batch: centang "3 varian per video" / `--varian 3`.
+3. **Objek AI** — hiasan yang berhubungan dengan cerita (Pisau / Pedang /
+   Mahkota / Cincin / Otomatis-dari-mood) di pojok kanan-atas. Siluet
+   digambar prosedural, lalu **dilukis AI** (img2img SD-Turbo kualitas paling
+   setia) agar bertekstur sinematik; tanpa model: siluet tetap rapi.
+4. **🖼 Ekspor Bingkai PNG** — bingkai aktif jadi PNG **transparan** untuk
+   dipakai ulang di Canva/Photoshop/dll.
+
 ## Instalasi (Windows)
 
 1. Buka [Releases](https://github.com/zacrie85/PosterBioskopAI/releases) → dari

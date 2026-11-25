@@ -103,7 +103,7 @@ def compose(art, title, template_path, size=(1080, 1920), tagline="",
             studio="POSTER BIOSKOP PICTURES",
             gaya_judul="Otomatis (menyesuaikan judul)",
             penata="Otomatis dari gambar", bingkai="Otomatis (dari gambar)",
-            seed=7):
+            seed=7, mood_neural=False):
     """Key art AI + template + tipografi sesuai zona template.
     Return PIL RGB image berukuran `size`."""
     W, H = size
@@ -156,6 +156,12 @@ def compose(art, title, template_path, size=(1080, 1920), tagline="",
     nama_b = None
     if bingkai and not str(bingkai).lower().startswith("tanpa"):
         an = pen.analisa_gambar(img)
+        if mood_neural:
+            try:
+                import mood_neural
+                an = mood_neural.dengan_neural(an, mood_neural.deteksi(img))
+            except Exception:                                  # noqa: BLE001
+                pass
         nama_b, _ = pen.pilih_bingkai(an, bingkai)
         if nama_b:
             img, _inset = bing.gambar(img, nama_b, an["palet"], aksen,

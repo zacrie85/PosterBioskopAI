@@ -219,6 +219,7 @@ def _tracked_fit(text, font, max_w, base_tracking):
 
 
 import bingkai as bingkai_mod
+import objek_ai as objek_ai_mod
 import penata as penata_mod
 
 
@@ -400,7 +401,8 @@ def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
                    release="SEGERA DI BIOSKOP", seed=7, template=None,
                    gaya_judul="Otomatis (menyesuaikan judul)",
                    penata="Otomatis dari gambar",
-                   bingkai="Otomatis (dari gambar)"):
+                   bingkai="Otomatis (dari gambar)",
+                   objek="Tanpa objek", ai=None, mood_neural_aktif=False):
     """Susun poster final: key art AI + tipografi dengan margin aman.
     Kalau `template` diisi (path file di folder templates/ atau path
     langsung), susunan visual mengikuti template itu (template_engine).
@@ -420,6 +422,12 @@ def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
 
     # --- PENATA AI: baca palet & mood gambar, putuskan warna/gaya/kontras ---
     an = penata_mod.analisa_gambar(img)
+    if mood_neural_aktif:
+        try:
+            import mood_neural
+            an = mood_neural.dengan_neural(an, mood_neural.deteksi(img))
+        except Exception:                                      # noqa: BLE001
+            pass
     keputusan = penata_mod.pilih_tipografi(
         an, gaya_pref=gaya_judul,
         klasik=(penata or "").lower().startswith("klasik"))
@@ -442,6 +450,17 @@ def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
     if nama_bingkai:
         img, inset_bingkai = bingkai_mod.gambar(img, nama_bingkai, an["palet"],
                                                 warna_aksen, seed=seed)
+
+    # --- objek semantik AI (v2.5.0): pisau/mahkota/dll di pojok kanan-atas ---
+    jenis_obj = objek_ai_mod.resolusi_objek(objek, an["mood"])
+    if jenis_obj:
+        try:
+            _obj = objek_ai_mod.buat(ai, jenis_obj, an["palet"], warna_aksen,
+                                     seed=seed)
+        except Exception:                                      # noqa: BLE001
+            _obj = None
+        if _obj is not None:
+            img = objek_ai_mod.tempel(img, _obj, skala=0.16)
     margin = max(int(W * 0.055), int(min(W, H) * 0.05), 24) + inset_bingkai
     max_w = W - 2 * margin
     cx = W / 2

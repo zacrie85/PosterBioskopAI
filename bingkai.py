@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
-"""Bingkai & hiasan poster — PosterBioskopAI v2.4.0.
+"""Bingkai & hiasan poster — PosterBioskopAI v2.5.0.
 
 10 gaya bingkai prosedural yang warnanya diambil dari palet key art
 (lihat penata.analisa_gambar). Digambar lokal dengan PIL + numpy: instan,
-deterministik (seed), tanpa unduhan. Semua gaya mengembalikan (img, inset_px)
-— inset dipakai mesin tipografi untuk menjaga teks tetap di dalam bingkai.
+deterministik (seed), tanpa unduhan.
+
+v2.5.0: setiap gaya kini mengembalikan (LAYER_RGBA, inset_px) — sehingga:
+  gambar()     : komposit bingkai ke poster (dipakai mesin komposisi)
+  transparan() : layer bingkai MURNI di atas transparan -> ekspor PNG
+                 yang bisa dipakai ulang di Canva/Photoshop/dll.
 """
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
@@ -17,16 +21,17 @@ EMAS_TERANG = (244, 210, 132)
 EMAS_GELAP = (168, 122, 56)
 
 
-def _selesai(img, layer):
-    img = Image.alpha_composite(img.convert("RGBA"), layer)
-    return img.convert("RGB")
+def _gabung(a, b):
+    """alpha_composite dua layer RGBA (a di bawah, b di atas)."""
+    return Image.alpha_composite(a, b)
 
 
 # ---------------------------------------------------------------- 1
-def _garis_klasik(img, palet, aksen, seed, m=None):
+def _garis_klasik(img, palet, aksen, seed):
     W, H = img.size
-    d = ImageDraw.Draw(layer := Image.new("RGBA", img.size, (0, 0, 0, 0)))
-    m = m or int(0.030 * min(W, H))
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    m = int(0.030 * min(W, H))
     lw = max(3, W // 320)
     d.rectangle([m, m, W - m, H - m], outline=(247, 246, 244, 225), width=lw)
     m2 = m + lw + int(0.008 * min(W, H))
@@ -35,7 +40,7 @@ def _garis_klasik(img, palet, aksen, seed, m=None):
     s = max(6, int(m * 0.9))
     for cx, cy in ((m, m), (W - m, m), (m, H - m), (W - m, H - m)):
         d.rectangle([cx - s, cy - s, cx + s, cy + s], fill=(*aksen, 255))
-    return _selesai(img, layer), m2 + lw
+    return layer, m2 + lw
 
 
 # ---------------------------------------------------------------- 2
@@ -43,13 +48,12 @@ def _emas_mewah(img, palet, aksen, seed):
     W, H = img.size
     t = max(10, int(0.034 * min(W, H)))
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    # pita emas bergradasi (profil segitiga: gelap-terang-gelap)
     tt = np.linspace(0, 1, t)
     profil = 1 - np.abs(tt - 0.5) * 2
     warna = np.zeros((t, 4), dtype=np.uint8)
     for i in range(3):
-        warna[:, i] = (EMAS_GELAP[i] + (np.array(EMAS_TERANG[i]) -
-                                        EMAS_GELAP[i]) * profil).astype(np.uint8)
+        warna[:, i] = (EMAS_GELAP[i] + (np.array(EMAS_TERANG[i], dtype=float)
+                                        - EMAS_GELAP[i]) * profil).astype(np.uint8)
     warna[:, 3] = 255
     pita = Image.fromarray(warna.reshape(t, 1, 4), "RGBA")
     layer.paste(pita.resize((W, t)), (0, 0))
@@ -60,12 +64,11 @@ def _emas_mewah(img, palet, aksen, seed):
     gar = (58, 42, 18, 255)
     d.rectangle([t, t, W - t, H - t], outline=gar, width=2)
     d.rectangle([2, 2, W - 2, H - 2], outline=gar, width=2)
-    # intan kecil di empat sudut
     s = int(t * 0.85)
     for cx, cy in ((t, t), (W - t, t), (t, H - t), (W - t, H - t)):
         d.polygon([(cx, cy - s), (cx + s, cy), (cx, cy + s), (cx - s, cy)],
                   fill=(*EMAS_TERANG, 255), outline=gar)
-    return _selesai(img, layer), t + 6
+    return layer, t + 6
 
 
 # ---------------------------------------------------------------- 3
@@ -89,7 +92,7 @@ def _film_strip(img, palet, aksen, seed):
                              W - band + band // 2 + hw // 2, y + hh],
                             radius=6, fill=(232, 230, 226, 95))
         y += langkah
-    return _selesai(img, layer), band + 8
+    return layer, band + 8
 
 
 # ---------------------------------------------------------------- 4
@@ -99,7 +102,7 @@ def _kertas_sobek(img, palet, aksen, seed):
     rng = np.random.default_rng(seed)
     n = 240
     t = np.linspace(0, 1, n)
-    # titik sepanjang keliling persegi (searah jarum jam dari pojok kiri-atas)
+
     def keliling(shrink):
         x0, y0, x1, y1 = shrink, shrink, W - shrink, H - shrink
         panjang = 2 * ((x1 - x0) + (y1 - y0))
@@ -115,6 +118,7 @@ def _kertas_sobek(img, palet, aksen, seed):
             else:
                 pts.append((x0, y1 - (j - 2 * (x1 - x0) - (y1 - y0))))
         return pts
+
     luar = keliling(2)
     dalam = keliling(b)
     mask = Image.new("L", img.size, 0)
@@ -123,9 +127,9 @@ def _kertas_sobek(img, palet, aksen, seed):
                 for p in luar], fill=255)
     dm.polygon([(p[0] + rng.uniform(-6, 6), p[1] + rng.uniform(-6, 6))
                 for p in dalam], fill=0)
-    putih = Image.new("RGBA", img.size, (245, 243, 240, 255))
-    putih.putalpha(mask)
-    return _selesai(img, putih), b + 6
+    layer = Image.new("RGBA", img.size, (245, 243, 240, 255))
+    layer.putalpha(mask)
+    return layer, b + 6
 
 
 # ---------------------------------------------------------------- 5
@@ -151,7 +155,7 @@ def _halftone(img, palet, aksen, seed):
             for px_ in (int(off), int(W - off)):
                 d.ellipse([px_ - r, py_ - r, px_ + r, py_ + r],
                           fill=(*aksen, 240))
-    return _selesai(img, layer), int(band) + 6
+    return layer, int(band) + 6
 
 
 # ---------------------------------------------------------------- 6
@@ -164,13 +168,12 @@ def _neon_glow(img, palet, aksen, seed):
     d.rectangle([m, m, W - m, H - m], outline=(*aksen, 255), width=lw)
     g1 = garis.filter(ImageFilter.GaussianBlur(W // 90))
     g2 = garis.filter(ImageFilter.GaussianBlur(W // 38))
-    img = _selesai(img, g2)
-    img = _selesai(img, g1)
-    return _selesai(img, garis), m + lw + int(W // 90) + 4
+    return _gabung(_gabung(g2, g1), garis), m + lw + int(W // 90) + 4
 
 
 # ---------------------------------------------------------------- 7
 def _art_deco(img, palet, aksen, seed):
+    import math
     W, H = img.size
     m = int(0.032 * min(W, H))
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -184,13 +187,12 @@ def _art_deco(img, palet, aksen, seed):
         sx = 1 if cx < W / 2 else -1
         sy = 1 if cy < H / 2 else -1
         for sudut in (18, 45, 72):
-            import math
             dx = math.cos(math.radians(sudut)) * pan * sx
             dy = math.sin(math.radians(sudut)) * pan * sy
             d.line([(cx, cy), (cx + dx, cy + dy)], fill=(*aksen, 255), width=2)
         r = max(4, lw + 2)
         d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(*aksen, 255))
-    return _selesai(img, layer), m2 + lw + 4
+    return layer, m2 + lw + 4
 
 
 # ---------------------------------------------------------------- 8
@@ -203,11 +205,12 @@ def _vignet_lembut(img, palet, aksen, seed):
     m = np.zeros((H, W, 4), dtype=np.uint8)
     m[..., 0:3] = 6
     m[..., 3] = alpha.astype(np.uint8)
-    img = _selesai(img, Image.fromarray(m, "RGBA"))
-    d = ImageDraw.Draw(layer := Image.new("RGBA", img.size, (0, 0, 0, 0)))
+    radial = Image.fromarray(m, "RGBA")
+    hair = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(hair)
     mm = int(0.020 * min(W, H))
     d.rectangle([mm, mm, W - mm, H - mm], outline=(250, 248, 244, 80), width=1)
-    return _selesai(img, layer), mm + 2
+    return _gabung(radial, hair), mm + 2
 
 
 # ---------------------------------------------------------------- 9
@@ -229,13 +232,11 @@ def _splat_aksen(img, palet, aksen, seed):
             px_ = int(cx + band * rng.random() * (1 if cx == 0 else -1))
             py_ = int(cy + band * rng.random() * (1 if cy == 0 else -1))
             d.ellipse([px_ - r, py_ - r, px_ + r, py_ + r], fill=(*aksen, 255))
-    return _selesai(img, layer), int(0.018 * min(W, H)) + 2
+    return layer, int(0.018 * min(W, H)) + 2
 
 
 # ---------------------------------------------------------------- 10
 def _gradien_wash(img, palet, aksen, seed):
-    """Cuci warna diagonal dari aksen (pojok bawah) + pita gelap halus di
-    bawah — memperkuat kontras judul dan strip bawah."""
     W, H = img.size
     yy, xx = np.mgrid[0:H, 0:W]
     g = (xx / W + (H - yy) / H) / 2.0
@@ -246,7 +247,7 @@ def _gradien_wash(img, palet, aksen, seed):
         m[..., i] = np.clip(aksen[i] * (alpha1 / 255.0)
                             + 10 * (alpha2 / 255.0), 0, 255).astype(np.uint8)
     m[..., 3] = np.clip(alpha1 + alpha2, 0, 255).astype(np.uint8)
-    return _selesai(img, Image.fromarray(m, "RGBA")), 0
+    return Image.fromarray(m, "RGBA"), 0
 
 
 _FUNGSI = {"Garis klasik": _garis_klasik, "Emas mewah": _emas_mewah,
@@ -262,4 +263,17 @@ def gambar(img, nama, palet, aksen, seed=7):
     fn = _FUNGSI.get((nama or "").strip())
     if fn is None:
         return img.convert("RGB") if img.mode != "RGB" else img, 0
-    return fn(img.convert("RGB"), palet, aksen, seed)
+    layer, inset = fn(img.convert("RGB"), palet, aksen, seed)
+    out = Image.alpha_composite(img.convert("RGBA"), layer)
+    return out.convert("RGB"), inset
+
+
+def transparan(nama, size, palet, aksen, seed=7):
+    """Layer bingkai MURNI (RGBA di latar transparan) + inset_px — untuk
+    ekspor PNG dipakai ulang di Canva/Photoshop/dll. Nama tak dikenal -> None."""
+    fn = _FUNGSI.get((nama or "").strip())
+    if fn is None:
+        return None, 0
+    dummy = Image.new("RGB", size, (0, 0, 0))
+    layer, inset = fn(dummy, palet, aksen, seed)
+    return layer, inset
