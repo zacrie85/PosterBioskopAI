@@ -402,7 +402,8 @@ def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
                    gaya_judul="Otomatis (menyesuaikan judul)",
                    penata="Otomatis dari gambar",
                    bingkai="Otomatis (dari gambar)",
-                   objek="Tanpa objek", ai=None, mood_neural_aktif=False):
+                   objek="Tanpa objek", ai=None, mood_neural_aktif=False,
+                   prompt_objek=""):
     """Susun poster final: key art AI + tipografi dengan margin aman.
     Kalau `template` diisi (path file di folder templates/ atau path
     langsung), susunan visual mengikuti template itu (template_engine).
@@ -452,7 +453,8 @@ def compose_poster(art, title, size=(1080, 1920), tagline="", pemain="",
                                                 warna_aksen, seed=seed)
 
     # --- objek semantik AI (v2.5.0): pisau/mahkota/dll di pojok kanan-atas ---
-    jenis_obj = objek_ai_mod.resolusi_objek(objek, an["mood"])
+    jenis_obj = objek_ai_mod.resolusi_objek(
+        objek, an["mood"], konteks="%s %s" % (title, prompt_objek))
     if jenis_obj:
         try:
             _obj = objek_ai_mod.buat(ai, jenis_obj, an["palet"], warna_aksen,
@@ -558,3 +560,12 @@ def preview_size(rasio_full, max_h=760, max_w=920):
     if pw > max_w:
         pw, ph = max_w, int(max_w / r)
     return (max(2, pw // 2 * 2), max(2, ph // 2 * 2))
+
+
+def upx2(poster):
+    """Upscale 2x untuk poster 4K: LANCZOS + unsharp mask (CPU, instan).
+    1080x1920 -> 2160x3840 (4K portrait)."""
+    W, H = poster.size
+    out = poster.resize((W * 2, H * 2), RESAMPLE)
+    return out.filter(ImageFilter.UnsharpMask(radius=2, percent=90,
+                                              threshold=2))

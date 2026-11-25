@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Mood neural (CLIP) — PosterBioskopAI v2.5.0.
+"""Mood neural (CLIP) — PosterBioskopAI v2.6.0.
 
 Deteksi mood poster oleh jaringan syaraf sungguhan: CLIP ViT-B/32 (ONNX,
 terkuantisasi ± 89 MB) menjalankan TOWER VISION di komputer pengguna; tower

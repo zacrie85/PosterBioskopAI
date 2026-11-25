@@ -67,6 +67,7 @@ import poster_ai as ai
 import poster_engine as eng
 import bingkai as bingkai_mod
 import mood_neural
+import objek_ai
 import frame_picker as fp
 import template_engine as te
 import template_gallery as tg
@@ -209,10 +210,15 @@ class PosterApp(tk.Tk):
         self.var_bingkai = tk.StringVar(value="Otomatis (dari gambar)")
         self.var_penata = tk.StringVar(value="Otomatis dari gambar")
         self.var_tekstur = tk.BooleanVar(value=False)
-        self.var_objek = tk.StringVar(value="Tanpa objek")
+        self.var_objek = tk.StringVar(value="Pintar (baca judul & prompt)")
         self.var_mood_neural = tk.BooleanVar(value=True)
         self.var_varian_batch = tk.BooleanVar(value=False)
         self._varian_aktif = False
+        self.var_hapus_sub = tk.BooleanVar(value=True)
+        self.var_upscale = tk.BooleanVar(value=False)
+        self._varian_opsi = []
+        self._kombo_aktif = None
+        self._thumb_refs = []
         self.var_rasio = tk.StringVar(value=ai.RASIOS[0])
         self.var_batch_rasio = tk.StringVar(value=ai.RASIOS[0])
         self.var_kualitas = tk.StringVar(value="Foto asli + sentuhan AI (paling setia)")
@@ -335,10 +341,10 @@ class PosterApp(tk.Tk):
         self.lbl_tmpl.pack(side="left", padx=(2, 8))
         self._tmpl_photo = None
         self._tmpl_cache = {}
-        ttk.Label(rowpv, text="🎨 galeri 131 template · PNG/JPG milikmu: "
-                              "taruh di folder templates\\ lalu klik 📁 "
-                              "(PNG transparan = di atas art, JPEG = latar). "
-                              "Pratinjau kiri ikut berubah.",
+        ttk.Label(rowpv, text="Template kini 2 saja: judul-atas / "
+                              "judul-bawah (posisi judul). PNG/JPG milikmu "
+                              "tetap bisa: taruh di folder templates\\ "
+                              "lalu klik 📁.",
                   style="Dim.TLabel", wraplength=218, justify="left").pack(
                       side="left", fill="both", expand=True)
         self.var_template.trace_add("write",
@@ -378,8 +384,8 @@ class PosterApp(tk.Tk):
         rowb3.pack(fill="x", pady=(4, 0))
         ttk.Label(rowb3, text="Objek AI:", style="Panel.TLabel").pack(side="left")
         ttk.Combobox(rowb3, textvariable=self.var_objek, state="readonly",
-                     values=["Tanpa objek", "Otomatis (dari mood)",
-                             "Pisau", "Pedang", "Mahkota", "Cincin"],
+                     values=["Pintar (baca judul & prompt)", "Tanpa objek",
+                             "Otomatis (dari mood)"] + list(objek_ai.JENIS),
                      width=22).pack(side="left", padx=6)
         rowb4 = ttk.Frame(f45)
         rowb4.pack(fill="x", pady=(3, 0))
@@ -397,6 +403,12 @@ class PosterApp(tk.Tk):
         rowb6.pack(fill="x", pady=(2, 0))
         ttk.Checkbutton(rowb6, text="Mode Batch: 3 varian per video",
                         variable=self.var_varian_batch).pack(side="left")
+        rowb7 = ttk.Frame(f45)
+        rowb7.pack(fill="x", pady=(3, 0))
+        ttk.Checkbutton(rowb7, text="Hapus subtitle otomatis",
+                        variable=self.var_hapus_sub).pack(side="left")
+        ttk.Checkbutton(rowb7, text="Upscale 2× (4K)",
+                        variable=self.var_upscale).pack(side="left", padx=10)
         ttk.Label(f45, text="Penata AI membaca palet & mood gambar: memilih "
                             "warna aksen, gaya judul, scrim, dan bingkai. "
                             "Objek AI menambah pisau/mahkota dsb di pojok; "
@@ -428,6 +440,8 @@ class PosterApp(tk.Tk):
         # ---------------- kolom kanan: preview ----------------
         right = ttk.Frame(root)
         right.pack(side="left", fill="both", expand=True, padx=(6, 10), pady=10)
+        self.thumbrow = tk.Frame(right, bg="#12121e")
+        self.thumbrow.pack(fill="x", side="bottom")
         self.canvas = tk.Canvas(right, bg="#0c0c14", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<Configure>", lambda e: self._place_preview())
@@ -674,6 +688,7 @@ class PosterApp(tk.Tk):
         if not self.source_img or self._busy:
             return
         self._busy = True
+        self._kombo_aktif = None
         self.var_status.set("AI sedang menggambar poster… (1-2 menit, tergantung PC)")
         img_src = self.source_img.copy()
         rasio_label = self.var_rasio.get()
@@ -697,7 +712,9 @@ class PosterApp(tk.Tk):
         def work():
             try:
                 art = self.poster_ai.generate(img_src, prompt, size,
-                                              quality_key=quality, progress=prog)
+                                              quality_key=quality,
+                                              hapus_subtitel=self.var_hapus_sub.get(),
+                                              progress=prog)
                 self._art_terakhir = art
                 varian_file = None
                 if self._varian_aktif:
@@ -716,10 +733,12 @@ class PosterApp(tk.Tk):
                             gaya_judul=gaya_judul, penata=p_x, bingkai=b_x,
                             objek=self.var_objek.get(), ai=self.poster_ai,
                             mood_neural_aktif=self.var_mood_neural.get(),
-                            template=template_path)
+                            prompt_objek=prompt, template=template_path)
                         if i == 1 and self.var_tekstur.get() and \
                                 not b_x.lower().startswith("tanpa"):
                             poster = self.poster_ai.tekstur(poster, prompt)
+                        if self.var_upscale.get():
+                            poster = eng.upx2(poster)
                         fp_var = os.path.join(folder_h, "%s-var%d.png" % (aman, i))
                         poster.save(fp_var, quality=92)
                         varian_file.append(fp_var)
@@ -732,10 +751,29 @@ class PosterApp(tk.Tk):
                                                 objek=self.var_objek.get(),
                                                 ai=self.poster_ai,
                                                 mood_neural_aktif=self.var_mood_neural.get(),
+                                                prompt_objek=prompt,
                                                 template=template_path)
                     if self.var_tekstur.get() and not bingkai.lower().startswith(
                             "tanpa"):
                         poster = self.poster_ai.tekstur(poster, prompt)
+                    if self.var_upscale.get():
+                        poster = eng.upx2(poster)
+                    ekstra = []
+                    for (p_e, b_e) in (("Klasik (putih-emas)", "Emas mewah"),
+                                       ("Otomatis dari gambar", "Film strip")):
+                        try:
+                            ekstra.append(eng.compose_poster(
+                                art, judul, size=full, tagline=tagline,
+                                pemain=pemain, sutradara=sutradara,
+                                release=rilis, gaya_judul=gaya_judul,
+                                penata=p_e, bingkai=b_e,
+                                objek=self.var_objek.get(), ai=self.poster_ai,
+                                mood_neural_aktif=self.var_mood_neural.get(),
+                                prompt_objek=prompt, template=template_path))
+                        except Exception:                      # noqa: BLE001
+                            ekstra.append(None)
+                    self.after(0, lambda: self._pasang_thumb_varian(
+                        [poster] + ekstra))
             except Exception as exc:                       # noqa: BLE001
                 # Catat galat ASLI seketika di thread kerja (traceback utuh ke
                 # log), lalu tampilkan via variabel lokal biasa — variabel
@@ -756,6 +794,50 @@ class PosterApp(tk.Tk):
                     "3 varian tersimpan di folder 'hasil' ✓  " +
                     " · ".join(os.path.basename(f) for f in varian_file)))
         threading.Thread(target=work, daemon=True).start()
+
+    _KOMBO_THUMB = [(None, None), ("Klasik (putih-emas)", "Emas mewah"),
+                    ("Otomatis dari gambar", "Film strip")]
+
+    def _pasang_thumb_varian(self, opsi):
+        """Varian A/B di pratinjau: 3 thumbnail di bawah kanvas."""
+        for w in self.thumbrow.winfo_children():
+            w.destroy()
+        self._thumb_refs = []
+        self._varian_opsi = list(opsi)
+        self._kombo_aktif = None
+        nama = ("Utama", "Klasik-emas", "Film strip")
+        for i, po in enumerate(opsi):
+            if po is None:
+                continue
+            th = po.copy()
+            th.thumbnail((92, 128), eng.RESAMPLE)
+            ph = ImageTk.PhotoImage(th)
+            self._thumb_refs.append(ph)
+            tk.Button(self.thumbrow, image=ph, relief="flat", bd=1,
+                      highlightthickness=2,
+                      highlightbackground=("#F2C14E" if i == 0 else "#2a2a3a"),
+                      command=lambda k=i: self._pilih_varian(k)
+                      ).pack(side="left", padx=(8, 0), pady=3)
+            tk.Label(self.thumbrow, text="%d. %s" % (i + 1, nama[i]),
+                     bg="#12121e", fg="#cfcfd8",
+                     font=("TkDefaultFont", 8)).pack(side="left", padx=(2, 0))
+        ttk.Label(self.thumbrow, text="← klik varian: pratinjau & 💾 Simpan "
+                                      "ikut varian ini",
+                  style="Dim.TLabel").pack(side="left", padx=10)
+
+    def _pilih_varian(self, idx):
+        poster = self._varian_opsi[idx]
+        if poster is None:
+            return
+        self._poster_preview = poster
+        scaled = poster.resize(eng.preview_size(poster.size), eng.RESAMPLE)
+        self._tk_preview = ImageTk.PhotoImage(scaled)
+        self._place_preview()
+        p_x, b_x = self._KOMBO_THUMB[idx]
+        self._kombo_aktif = (p_x, b_x) if p_x else None
+        self.var_status.set(
+            "Varian %d/3 tampil — 💾 Simpan akan menyimpan gaya varian ini."
+            % (idx + 1))
 
     def _render_done(self):
         self._busy = False
@@ -872,11 +954,14 @@ class PosterApp(tk.Tk):
         rilis, gaya_judul = self.var_rilis.get().strip(), self.var_gaya_judul.get()
         penata = self.var_penata.get()
         bingkai = self.var_bingkai.get()
+        if self._kombo_aktif:              # pratinjau varian A/B aktif
+            penata, bingkai = self._kombo_aktif
 
         def work():
             try:
                 art = self.poster_ai.generate(img_src, prompt, size,
-                                              quality_key=quality)
+                                              quality_key=quality,
+                                              hapus_subtitel=self.var_hapus_sub.get())
                 self._art_terakhir = art
                 poster = eng.compose_poster(art, judul_v, size=full, tagline=tagline,
                                             pemain=pemain, sutradara=sutradara,
@@ -885,10 +970,13 @@ class PosterApp(tk.Tk):
                                             objek=self.var_objek.get(),
                                             ai=self.poster_ai,
                                             mood_neural_aktif=self.var_mood_neural.get(),
+                                            prompt_objek=prompt,
                                             template=template_path)
                 if self.var_tekstur.get() and not bingkai.lower().startswith(
                         "tanpa"):
                     poster = self.poster_ai.tekstur(poster, prompt)
+                if self.var_upscale.get():
+                    poster = eng.upx2(poster)
                 poster.save(path, quality=92)
                 ok, err, p = True, None, path
             except Exception as exc:                       # noqa: BLE001
@@ -1012,6 +1100,8 @@ class PosterApp(tk.Tk):
                                    mood_neural=self.var_mood_neural.get(),
                                    varian=3 if self.var_varian_batch.get()
                                    else 1,
+                                   hapus_subtitel=self.var_hapus_sub.get(),
+                                   upscale=self.var_upscale.get(),
                                    log=log, progress=prog,
                                    should_continue=lambda: not cancel["v"])
             except Exception as exc:                # noqa: BLE001

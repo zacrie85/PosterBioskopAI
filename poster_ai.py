@@ -567,7 +567,7 @@ class PosterAI:
         return ok
 
     def generate(self, init_img, prompt_text, size, quality_key="Normal (2 langkah)",
-                 seed=None, progress=None):
+                 seed=None, progress=None, hapus_subtitel=False):
         """Ubah init_img menjadi key art poster AI. Return PIL RGB image.
         progress(fase, info) — fase: 'encode', 'langkah', 'decode'.
         """
@@ -577,6 +577,15 @@ class PosterAI:
         if preset is None:                    # nama tak dikenal -> preset setia
             preset = QUALITY_PRESETS["Foto asli + sentuhan AI (paling setia)"]
         n_steps, strength, gaya = preset
+
+        if hapus_subtitel:
+            # subtitle hardsub di frame video dihapus dulu; AI akan
+            # "menyembuhkan" area buramnya jadi latar yang wajar
+            try:
+                import subtitel
+                init_img = subtitel.hapus(init_img, progress=progress)
+            except Exception:                                  # noqa: BLE001
+                pass
 
         # jadwal langkah + pemangkasan sesuai strength (ala diffusers img2img)
         timesteps = np.linspace(1000, 1, n_steps).round().astype(np.int64) - 1

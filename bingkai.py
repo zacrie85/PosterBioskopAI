@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Bingkai & hiasan poster — PosterBioskopAI v2.5.0.
+"""Bingkai & hiasan poster — PosterBioskopAI v2.6.0.
 
 10 gaya bingkai prosedural yang warnanya diambil dari palet key art
 (lihat penata.analisa_gambar). Digambar lokal dengan PIL + numpy: instan,

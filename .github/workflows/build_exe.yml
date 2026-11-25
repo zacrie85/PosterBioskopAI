@@ -149,7 +149,7 @@ jobs:
 
       - name: Uji template bawaan (batch dengan template)
         timeout-minutes: 25
-        run: python batch_poster.py video_uji --out hasil_ai_template --rasio "9:16" --kualitas "Cepat (1 langkah)" --template "$(python -c "import template_engine as te; print([t['nama'] for t in te.list_templates() if t['nama'].startswith('klasik-emas')][0])")"
+        run: python batch_poster.py video_uji --out hasil_ai_template --rasio "9:16" --kualitas "Cepat (1 langkah)" --template "judul-bawah"
 
       - name: Simpan contoh poster AI sebagai artifact
         uses: actions/upload-artifact@v4

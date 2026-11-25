@@ -60,7 +60,7 @@ def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None,
                 gaya_judul="Otomatis (menyesuaikan judul)",
                 penata="Otomatis dari gambar", bingkai="Otomatis (dari gambar)",
                 tekstur_ai=False, objek="Tanpa objek", mood_neural=False,
-                varian=1):
+                varian=1, hapus_subtitel=True, upscale=False):
     """Proses satu file: frame -> AI -> poster tipografi. Return dict ringkasan."""
     t0 = time.time()
     is_vid = fp.is_video(path)
@@ -84,12 +84,14 @@ def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None,
     if engine is None:
         engine = ai.PosterAI(keep_loaded=True)
         process_one._engine = engine                  # sesi model dipakai ulang
-    art = engine.generate(img, prompt, canvas, quality_key=kualitas, progress=prog)
+    art = engine.generate(img, prompt, canvas, quality_key=kualitas,
+                          progress=prog, hapus_subtitel=hapus_subtitel)
     poster = eng.compose_poster(art, judul, size=full, template=template,
                                 release=rilis, gaya_judul=gaya_judul,
                                 penata=penata, bingkai=bingkai,
                                 objek=objek, ai=engine,
-                                mood_neural_aktif=mood_neural)
+                                mood_neural_aktif=mood_neural,
+                                prompt_objek=prompt)
     if tekstur_ai and bingkai and not bingkai.lower().startswith("tanpa"):
         try:
             poster = process_one._engine.tekstur(poster, prompt)
@@ -103,7 +105,10 @@ def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None,
                 pv = eng.compose_poster(art, judul, size=full, template=template,
                                         release=rilis, gaya_judul=gaya_judul,
                                         penata=p_x, bingkai=b_x, objek=objek,
-                                        ai=engine, mood_neural_aktif=mood_neural)
+                                        ai=engine, mood_neural_aktif=mood_neural,
+                                        prompt_objek=prompt)
+                if upscale:
+                    pv = eng.upx2(pv)
                 pv.save(os.path.join(out_dir,
                                      _unique_name(judul, used)
                                      .replace(".png", "") + "-var%d.png" % i),
@@ -113,6 +118,8 @@ def process_one(path, out_dir, ratio_key, prompt, kualitas, used, log=None,
             except Exception as exc:                       # noqa: BLE001
                 if log:
                     log("      varian %d gagal: %s" % (i, exc))
+    if upscale:
+        poster = eng.upx2(poster)
     out_path = os.path.join(out_dir, _unique_name(judul, used) + ".png")
     poster.save(out_path, quality=92)
     return {
@@ -134,7 +141,7 @@ def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
               rilis="SEGERA DI BIOSKOP", gaya_judul="Otomatis (menyesuaikan judul)",
               penata="Otomatis dari gambar", bingkai="Otomatis (dari gambar)",
               tekstur_ai=False, objek="Tanpa objek", mood_neural=False,
-              varian=1):
+              varian=1, hapus_subtitel=True, upscale=False):
     """Proses SEMUA video/foto di folder dengan SATU prompt AI yang sama.
 
     log(msg)               -> pesan kemajuan (mis. untuk Text di GUI / print)
@@ -180,7 +187,9 @@ def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
         + (" · Tekstur AI aktif" if tekstur_ai and bingkai
            and not bingkai.lower().startswith("tanpa") else ""))
     log(f"Objek AI: {objek} · Mood CLIP: {'aktif' if mood_neural else 'mati'}"
-        + (" · 3 varian per file" if varian and varian > 1 else ""))
+        + (" · 3 varian per file" if varian and varian > 1 else "")
+        + (" · upscale 2x 4K" if upscale else "")
+        + ("" if hapus_subtitel else " · subtitle dibiarkan"))
     if template_path:
         log(f"Template: {os.path.basename(template_path)}")
     log(f"Prompt untuk SEMUA file: {prompt_pendek}")
@@ -200,7 +209,8 @@ def run_batch(folder, out_dir=None, ratio_key="Ikuti rasio video", prompt=None,
                             gaya_judul=gaya_judul, penata=penata,
                             bingkai=bingkai, tekstur_ai=tekstur_ai,
                             objek=objek, mood_neural=mood_neural,
-                            varian=varian)
+                            varian=varian, hapus_subtitel=hapus_subtitel,
+                            upscale=upscale)
             hasil.append(r)
             done += 1
             sumber = f"detik {r['detik']} dari video" if r["video"] else "foto"
@@ -251,9 +261,10 @@ def main():
     ap.add_argument("--tekstur-bingkai", action="store_true",
                     help="1 langkah img2img ekstra agar bingkai menyatu "
                          "dengan key art (lebih lambat)")
-    ap.add_argument("--objek", default="Tanpa objek",
-                    help="Tanpa objek | Otomatis (dari mood) | Pisau | "
-                         "Pedang | Mahkota | Cincin")
+    ap.add_argument("--objek", default="Pintar (baca judul & prompt)",
+                    help="Pintar (baca judul & prompt) | Tanpa objek | "
+                         "Otomatis (dari mood) | Pisau | Pedang | Mahkota | "
+                         "Cincin | Kapal | Kapal Selam | Ular")
     ap.add_argument("--mood-neural", action="store_true",
                     help="pakai model mood CLIP jika sudah diunduh")
     ap.add_argument("--varian", type=int, default=1,
@@ -261,6 +272,12 @@ def main():
                          "lain per file (-var2, -var3)")
     ap.add_argument("--unduh-mood", action="store_true",
                     help="unduh model mood CLIP (±90 MB) lalu keluar")
+    ap.add_argument("--jaga-subtitel", action="store_true",
+                    help="JANGAN hapus subtitle hardsub (bawaan: dihapus "
+                         "sebelum AI menggambar)")
+    ap.add_argument("--upscale-x2", action="store_true",
+                    help="perbesar poster 2x (mis. 1080x1920 -> 2160x3840, "
+                         "4K portrait)")
     ap.add_argument("folder", nargs="?", default=None,
                     help="folder berisi video/foto (tidak perlu untuk "
                          "--unduh-mood)")
@@ -270,8 +287,8 @@ def main():
     ap.add_argument("--gaya-judul", default="Otomatis (menyesuaikan judul)",
                     choices=list(eng.GAYA_JUDUL))
     ap.add_argument("--template", default="Tanpa",
-                    help="nama template di folder templates/ (mis. 'klasik-emas-063') "
-                         "atau path file PNG/JPG; 'Tanpa' = tipografi bawaan")
+                    help="judul-atas / judul-bawah (posisi judul), path file "
+                         "PNG/JPG milikmu, atau 'Tanpa' = bawaan penata")
     a = ap.parse_args()
 
     if a.unduh_mood:
@@ -288,7 +305,9 @@ def main():
                         gaya_judul=a.gaya_judul, penata=a.penata,
                         bingkai=a.bingkai, tekstur_ai=a.tekstur_bingkai,
                         objek=a.objek, mood_neural=a.mood_neural,
-                        varian=a.varian)
+                        varian=a.varian,
+                        hapus_subtitel=not a.jaga_subtitel,
+                        upscale=a.upscale_x2)
     except (ValueError, RuntimeError) as exc:
         # pesan ramah (folder kosong, model belum lengkap, mesin AI gagal) —
         # bukan traceback mentah

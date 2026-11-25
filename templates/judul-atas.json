@@ -1,0 +1,14 @@
+{
+ "judul": [
+  0.06,
+  0.07,
+  0.94,
+  0.26
+ ],
+ "scrim": true,
+ "warna": "#F7F6F4",
+ "aksen": "#F2C14E",
+ "garis": true,
+ "tanggal": true,
+ "billing": true
+}

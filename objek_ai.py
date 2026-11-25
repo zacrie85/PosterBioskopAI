@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Objek semantik AI — PosterBioskopAI v2.5.0.
+"""Objek semantik AI — PosterBioskopAI v2.6.0.
 
 Menambahkan OBJEK kecil yang berhubungan dengan cerita poster (pisau untuk
 thriller, mahkota untuk kerajaan, dll.) di pojok kanan-atas poster.
@@ -15,7 +15,8 @@ Tanpa model AI: siluet prosedural tetap dipakai (tetap rapi, cuma flat).
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-JENIS = ("Pisau", "Pedang", "Mahkota", "Cincin")
+JENIS = ("Pisau", "Pedang", "Mahkota", "Cincin", "Kapal", "Kapal Selam",
+         "Ular")
 
 PROMPT = {
     "pisau": "ornate golden ceremonial dagger blade on plain dark "
@@ -26,9 +27,16 @@ PROMPT = {
                "cinematic studio lighting, centered",
     "cincin": "golden ring with glowing gem on plain dark background, "
               "cinematic studio lighting, centered",
+    "kapal": "wooden sailing ship with masts on plain dark background, "
+             "cinematic studio lighting, centered",
+    "kapal selam": "military submarine with periscope on plain dark "
+                   "background, cinematic studio lighting, centered",
+    "ular": "giant python snake coiled on plain dark background, "
+            "cinematic studio lighting, centered, detailed scales",
 }
 
 OTOMATIS = "Otomatis (dari mood)"
+PINTAR = "Pintar (baca judul & prompt)"
 TANPA = "Tanpa objek"
 
 # mood -> jenis (terang-ceria tidak butuh objek)
@@ -36,16 +44,41 @@ MOOD_OBJEK = {"gelap-dramatis": "Pisau", "ramai-aksi": "Pedang",
               "dingin-misterius": "Mahkota", "hangat-romantis": "Cincin",
               "terang-ceria": None}
 
+# kata kunci -> objek (urutan = prioritas; yang spesifik lebih dulu)
+KATA_KUNCI = (
+    ("kapal selam", "Kapal Selam"), ("submarin", "Kapal Selam"),
+    ("kapal", "Kapal"), ("perahu", "Kapal"), ("layar", "Kapal"),
+    ("ular", "Ular"), ("naga", "Ular"), ("boa", "Ular"), ("sanca", "Ular"),
+    ("kobra", "Ular"), ("piton", "Ular"),
+    ("mahkota", "Mahkota"), ("kerajaan", "Mahkota"), ("ratu", "Mahkota"),
+    ("sultan", "Mahkota"), ("putri", "Mahkota"), ("raja", "Mahkota"),
+    ("cincin", "Cincin"), ("pernikahan", "Cincin"), ("lamaran", "Cincin"),
+    ("pedang", "Pedang"), ("kesatria", "Pedang"), ("samurai", "Pedang"),
+    ("pisau", "Pisau"), ("parang", "Pisau"), ("keris", "Pisau"),
+    ("pembunuh", "Pisau"), ("senjata", "Pisau"),
+)
 
-def resolusi_objek(pilihan, mood):
-    p = (pilihan or TANPA).strip()
-    if p.lower().startswith("tanpa"):
+
+def dari_teks(konteks):
+    """Baca judul + prompt: kata kunci cerita -> jenis objek (atau None)."""
+    t = (konteks or "").lower()
+    for kata, jenis in KATA_KUNCI:
+        if kata in t:
+            return jenis
+    return None
+
+
+def resolusi_objek(pilihan, mood, konteks=""):
+    p = (pilihan or TANPA).strip().lower()
+    if p.startswith("tanpa"):
         return None
-    if p.lower().startswith("otomatis"):
+    if p.startswith("pintar"):
+        return dari_teks(konteks)
+    if p.startswith("otomatis"):
         return MOOD_OBJEK.get(mood)
-    for j in JENIS:
-        if j.lower() in p.lower():
-            return j
+    for j in sorted(JENIS, key=len, reverse=True):   # terpanjang dulu:
+        if j.lower() in p:                           # "kapal selam" menang
+            return j                                 # atas "kapal"
     return None
 
 
@@ -84,6 +117,37 @@ def siluet(jenis, size=(384, 384)):
     elif jenis == "cincin":
         d.ellipse([cx - 76, 130, cx + 76, 282], outline=255, width=28)
         d.polygon([(cx, 96), (cx + 30, 126), (cx, 156), (cx - 30, 126)],
+                  fill=255)
+    elif jenis == "kapal":
+        d.polygon([(46, 236), (338, 236), (306, 302), (78, 302)], fill=255)
+        _kotak(d, 92, 206, 292, 236)
+        d.line([(128, 206), (128, 108)], fill=255, width=9)
+        d.line([(256, 206), (256, 128)], fill=255, width=9)
+        d.polygon([(132, 112), (196, 168), (132, 168)], fill=255)
+        d.polygon([(260, 132), (316, 182), (260, 182)], fill=255)
+        d.polygon([(46, 236), (14, 214), (46, 196)], fill=255)
+    elif jenis == "kapal selam":
+        d.ellipse([42, 196, 342, 288], fill=255)
+        _kotak(d, 156, 150, 226, 200, r=8)
+        _kotak(d, 184, 118, 196, 152)
+        d.polygon([(310, 196), (342, 160), (342, 250), (310, 250)], fill=255)
+        d.ellipse([18, 218, 52, 266], fill=255)
+        for wx in (110, 160, 210):
+            d.ellipse([wx - 9, 232, wx + 9, 250], fill=0)
+    elif jenis == "ular":
+        pts = []
+        for i in range(46):
+            t = i / 45.0
+            pts.append((36 + t * 312,
+                        286 - 96 * np.sin(t * np.pi * 1.7 + 0.4)
+                        - t * 8))
+        r0, r1 = 9, 21
+        for i, (x, y) in enumerate(pts):
+            r = r0 + (r1 - r0) * (i / 45.0)
+            d.ellipse([x - r, y - r, x + r, y + r], fill=255)
+        hx, hy = pts[-1]
+        d.ellipse([hx - 26, hy - 15, hx + 26, hy + 15], fill=255)
+        d.polygon([(hx + 24, hy - 4), (hx + 44, hy), (hx + 24, hy + 4)],
                   fill=255)
     return m
 

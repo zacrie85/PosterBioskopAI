@@ -23,30 +23,19 @@ desain — tanpa internet, tanpa API key.
    **margin aman: teks dijamin tidak melewati batas kiri/kanan**. Rasio:
    **9:16 (Story/Reels/TikTok)** · **16:9 (Layar)** · atau ikuti rasio video.
 
-## Memilih template — 131 desain bawaan
+## Template kini 2: posisi judul saja (v2.6.0)
 
-Di panel **Template** ada empat cara; semua instan dan tanpa perlu paham desain:
+Template 131 desain lama dihapus — ternyata kebanyakan orang hanya butuh
+**menentukan posisi judul**. Kini cukup 2 pilihan di dropdown Template:
 
-1. **🎨 Galeri visual (paling mudah)** — klik tombol 🎨 di samping dropdown:
-   seluruh 131 template tampil sebagai pratinjau poster kecil, **klik satu
-   gambar** dan langsung terpasang di aplikasi.
-2. **Dropdown** — pilih langsung; pola nama berkas = `keluarga-palet-nomor`
-   (mis. `festival-senja-039` = keluarga *Festival*, palet *Senja*).
-3. **Pratinjau di aplikasi (v2.3.0)** — dropdown Template kini menampilkan KOTAK PRATINJAU kecil di bawahnya; pilih nama → pratinjau langsung berubah, jadi kelihatan bentuknya sebelum dipakai.
-4. **Katalog gambar** — buka `templates\_katalog-template.jpg` untuk melihat
-   semua desain sekaligus, bahkan tanpa menjalankan aplikasi.
-5. **PNG/JPG milikmu** — taruh di folder `templates\` (tombol 📁 membukanya
-   lalu klik 📁 sekali lagi untuk menyegarkan); PNG transparan disusun di atas
-   key art, JPEG dipakai sebagai latar. **Tanpa template** = komposisi bawaan
-   mesin tipografi.
+- **judul-atas** — judul di sepertiga atas (bagus saat wajah/karakter ada
+  di bagian bawah frame).
+- **judul-bawah** — judul di bawah (gaya poster bioskop klasik).
 
-Keluarga layout: Klasik · Judul Atas · Letterbox · Panel Samping · Festival ·
-Komedi · Minimalis · Gradien Penuh · Duotone · Bingkai · Badge · Kolom Tiga ·
-Vignette · Sisi Gelap · Skrim Puncak. Palet: Emas · Crimson · Orka · Ungu ·
-Biru · Senja · Rimba · Mono · Pop · Perak. Tips cepat: drama/kisah nyata →
-*Festival* atau *Klasik*; aksi/horor → *Sisi Gelap*, *Duotone*, *Skrim
-Puncak*; komedi/seru → *Komedi* + palet *Pop*; dokumenter bersih →
-*Minimalis* atau *Letterbox*.
+Keduanya otomatis menggelapkan area judul (scrim) supaya tulisan selalu
+terbaca. **PNG/JPG buatanmu tetap didukung**: taruh di folder `templates\`
+lalu klik 📁 — PNG transparan disusun di atas key art, JPEG dipakai sebagai
+latar. **Tanpa template** = penata memilih posisi & gaya sendiri.
 
 ## Foto asli (bukan kartun) & judul selalu utuh — v2.2.0
 
@@ -119,6 +108,23 @@ Panel baru **"5. BINGKAI & PENATA AI"** di aplikasi:
 Mode batch: `--bingkai "Emas mewah"`, `--penata "Klasik (putih-emas)"`,
 `--tekstur-bingkai`. Semua proses 100% offline, tanpa unduhan baru.
 
+## Fitur Baru — v2.6.0
+
+1. **🧹 Hapus subtitle otomatis** — frame video dengan subtitle yang menempel
+   (hardsub) dibersihkan DULU sebelum AI menggambar, jadi tidak ada teks
+   liar di belakang judul. Deteksi pola baris teks di pita bawah; kalau
+   tidak yakin, frame dibiarkan utuh (anti-rusak). Nonaktif: hilangkan
+   centang "Hapus subtitle otomatis" / CLI `--jaga-subtitel`.
+2. **🧠 Objek pintar dari judul & prompt** — kata "kapal selam" di judul →
+   objek kapal selam; "ular/naga" → ular; "kerajaan/raja" → mahkota; dst.
+   Ini pilihan bawaan dropdown Objek AI; mood tetap jadi cadangan lewat
+   pilihan "Otomatis (dari mood)". Objek baru: **Kapal, Kapal Selam, Ular**.
+3. **🔍 Upscale 2× (4K)** — centang "Upscale 2× (4K)": poster 1080×1920
+   menjadi 2160×3840 tajam (LANCZOS + unsharp). CLI: `--upscale-x2`.
+4. **🎯 Varian A/B di pratinjau** — setelah AI selesai, 3 thumbnail varian
+   muncul di bawah pratinjau; klik satu → pratinjau berganti dan **💾 Simpan
+   mengikuti gaya varian yang dipilih**.
+
 ## 4 Fitur Baru — v2.5.0
 
 1. **Mood neural (CLIP)** — deteksi mood oleh jaringan syaraf sungguhan
@@ -163,7 +169,7 @@ Ingin build EXE sendiri? Jalankan `build_windows.bat`.
   ```
   python batch_poster.py "D:\video-kegiatan" --rasio "9:16" --kualitas "Cepat (1 langkah)"
   python batch_poster.py folder --prompt "poster malam kabut neon biru"
-  python batch_poster.py folder --template festival-senja-039
+  python batch_poster.py folder --template judul-bawah
   ```
 
 ## Struktur proyek
@@ -176,8 +182,8 @@ Ingin build EXE sendiri? Jalankan `build_windows.bat`.
 | `poster_engine.py` | Tipografi & komposisi poster (margin aman) |
 | `frame_picker.py` | Ekstraksi frame terbaik + judul dari nama video |
 | `template_engine.py` | Pasang template layout/palet di atas key art |
-| `template_gallery.py` | Galeri 🎨 pemilih template + pembuat katalog |
-| `templates/` | 131 template bawaan (PNG+JSON) + katalog & cache pratinjau |
+| `template_gallery.py` | Galeri 🎨 pratinjau template |
+| `templates/` | 2 template posisi judul (judul-atas/bawah) + folder PNG/JPG milikmu |
 | `build_windows.bat` | Build EXE (PyInstaller) |
 | `.github/workflows/` | Build EXE otomatis di runner Windows GitHub |
 | `contoh/` | Video uji |
